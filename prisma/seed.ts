@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { ovhApi } from '../lib/db/ovh-api-client';
 import saintsAnnee from './seed-data-saints.json';
 import dictonsAnnee from './seed-data-dictons.json';
+import villesFrance from './seed-data-villes.json';
 
 /**
  * Importe le contenu éditorial via l'API OVH (ovh-api/) au lieu d'une connexion MySQL
@@ -11,6 +12,7 @@ import dictonsAnnee from './seed-data-dictons.json';
  *
  * Saints : 365 jours, flux iCal Nominis — voir prisma/parser-nominis.mjs.
  * Dictons : 365 jours, meteoeu.net — voir prisma/parser-meteoeu.mjs.
+ * Villes : 34969 communes, API Géo officielle (data.gouv.fr/Etalab) — voir prisma/parser-villes.mjs.
  * `verifie: false` par défaut sur les saints : à confirmer depuis l'admin après relecture.
  */
 async function main() {
@@ -27,6 +29,17 @@ async function main() {
     }))
   );
   console.log(`${compteDictons} dictons envoyés à l'API.`);
+
+  const villes = villesFrance as Record<string, unknown>[];
+  const TAILLE_LOT = 2000;
+  let totalVilles = 0;
+  for (let i = 0; i < villes.length; i += TAILLE_LOT) {
+    const lot = villes.slice(i, i + TAILLE_LOT);
+    const { compte } = await ovhApi.villesImportMasse(lot);
+    totalVilles += compte;
+    console.log(`Villes : ${totalVilles}/${villes.length} envoyées...`);
+  }
+  console.log(`${totalVilles} communes envoyées à l'API.`);
 }
 
 main().catch((e) => {

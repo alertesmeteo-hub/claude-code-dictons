@@ -179,6 +179,22 @@ switch ("$methode:$route") {
 		}
 		repondre(['ok' => true, 'compte' => $compte]);
 
+	case 'POST:villes/bulk':
+		$d = corpsJson();
+		$liste = $d['villes'] ?? [];
+		$stmt = $db->prepare(
+			'INSERT INTO villes (nom, code_postal, departement, latitude, longitude, slug)
+			 VALUES (?, ?, ?, ?, ?, ?)
+			 ON DUPLICATE KEY UPDATE nom=nom'
+		);
+		$compte = 0;
+		foreach ($liste as $v) {
+			$stmt->bind_param('sssdds', $v['nom'], $v['codePostal'], $v['departement'], $v['latitude'], $v['longitude'], $v['slug']);
+			$stmt->execute();
+			$compte++;
+		}
+		repondre(['ok' => true, 'compte' => $compte]);
+
 	// ---- Villes (recherche) ----
 	case 'GET:villes/recherche':
 		$q = $_GET['q'] ?? '';

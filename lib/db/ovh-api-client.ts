@@ -105,6 +105,9 @@ export const ovhApi = {
 
   villesRecherche: (q: string) => appelerApi<VilleApi[]>(`villes/recherche&q=${encodeURIComponent(q)}`),
 
+  villesImportMasse: (villes: Record<string, unknown>[]) =>
+    appelerApi<{ ok: true; compte: number }>('villes/bulk', { method: 'POST', body: JSON.stringify({ villes }) }),
+
   extremesFrance: () => appelerApi<{ date: string; donnees: ExtremeApi[] }>('extremes/france'),
 
   extremesEnregistrer: (mesures: Record<string, unknown>[]) =>
