@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npx prisma generate
+        env:
+          DATABASE_URL: 'mysql://user:pass@localhost:3306/db' # factice, generate n'a pas besoin d'une vraie connexion
+      - run: npm test
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_SITE_URL: 'https://dicton-du-jour.alertes-meteo.com'

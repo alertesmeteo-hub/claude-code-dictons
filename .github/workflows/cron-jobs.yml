@@ -1,0 +1,51 @@
+name: Tâches planifiées
+
+# Secrets attendus (idéalement définis au niveau de l'organisation GitHub
+# alertesmeteo-hub, partagés entre repos, pour n'avoir qu'un seul endroit
+# à mettre à jour lors d'une rotation de clé) :
+#   - DATABASE_URL          (serveur MySQL bijouxdealertes)
+#   - METEOFRANCE_API_KEY   (API DPObs, portail-api.meteofrance.fr)
+
+on:
+  schedule:
+    # 00:05 UTC — génération de la page du jour
+    - cron: '5 0 * * *'
+    # Toutes les 3h — synchronisation des températures extrêmes
+    - cron: '0 */3 * * *'
+  workflow_dispatch: {} # déclenchement manuel depuis l'onglet Actions, utile pour tester
+
+jobs:
+  generation-jour:
+    if: github.event.schedule == '5 0 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npx prisma generate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - run: npm run cron:generation-jour
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+  extremes-meteo:
+    if: github.event.schedule == '0 */3 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npx prisma generate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - run: npm run cron:extremes-meteo
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          METEOFRANCE_API_KEY: ${{ secrets.METEOFRANCE_API_KEY }}

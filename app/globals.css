@@ -1,0 +1,157 @@
+:root {
+  --couleur-fond: #f5f8fb;
+  --couleur-texte: #17202a;
+  --couleur-accent: #2563eb;
+  --couleur-carte: #ffffff;
+  --couleur-bordure: #e2e8f0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  background: var(--couleur-fond);
+  color: var(--couleur-texte);
+  line-height: 1.5;
+}
+
+.page-jour {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.page-jour section {
+  background: var(--couleur-carte);
+  border: 1px solid var(--couleur-bordure);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.navigation-jour {
+  text-align: center;
+  padding: 12px 0;
+  font-size: 0.95rem;
+}
+
+.navigation-jour-date {
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.navigation-jour-fil {
+  margin: 0;
+  color: #64748b;
+}
+
+.navigation-jour a {
+  color: var(--couleur-accent);
+  text-decoration: none;
+}
+
+.meta-jour {
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.type-dicton {
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+h1 {
+  font-size: 1.5rem;
+}
+
+input[type='text'] {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--couleur-bordure);
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
+.suggestions-villes {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+}
+
+.suggestions-villes button {
+  width: 100%;
+  text-align: left;
+  padding: 8px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--couleur-bordure);
+  cursor: pointer;
+}
+
+.admin-shell {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.admin-nav {
+  display: flex;
+  gap: 16px;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--couleur-bordure);
+}
+
+.admin-nav a {
+  color: var(--couleur-accent);
+  text-decoration: none;
+}
+
+.admin-formulaire {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 480px;
+  margin: 12px 0;
+}
+
+.admin-formulaire label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9rem;
+}
+
+.admin-alerte {
+  background: #fef2f2;
+  border-color: #fecaca !important;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+th, td {
+  text-align: left;
+  padding: 8px;
+  border-bottom: 1px solid var(--couleur-bordure);
+  font-size: 0.9rem;
+}
+
+.log-erreur {
+  color: #b91c1c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --couleur-fond: #0f172a;
+    --couleur-texte: #e2e8f0;
+    --couleur-carte: #1e293b;
+    --couleur-bordure: #334155;
+  }
+}
