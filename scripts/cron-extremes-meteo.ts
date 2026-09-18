@@ -1,23 +1,17 @@
-import { prisma } from '../lib/db/prisma';
+import 'dotenv/config';
+import { ovhApi } from '../lib/db/ovh-api-client';
 
 /**
- * Source : API "Données Publiques d'Observation" de Météo-France (DPObs v2), gratuite.
- * - Compte + souscription (gratuite) requis sur https://portail-api.meteofrance.fr/
- * - Base URL vérifiée : https://public-api.meteofrance.fr/public/DPObs/v1
- * - Endpoints utilisés : /liste-stations-synop (liste + altitude des ~62 stations SYNOP
- *   de métropole) puis /station/horaire?id_station=...&date=... par station.
- * - Authentification : Bearer token. Le portail Météo-France échange généralement la clé
- *   d'application contre un token via https://portail-api.meteofrance.fr/token
- *   (grant_type=client_credentials, Basic Auth avec la clé applicative encodée en base64).
- *   ⚠️ Le détail exact du flux (nom des en-têtes, durée de vie du token) n'a pas pu être
- *   vérifié sans compte connecté sur le portail — à confirmer lors de la création du compte
- *   et à ajuster ici si besoin.
- * - Format des champs de la réponse /station/horaire (ex: nom exact du champ température,
- *   unité °C vs K) n'a pas non plus été vérifié en conditions réelles (nécessite un token
- *   valide) : à ajuster contre une vraie réponse avant mise en production.
+ * ⚠️ SQUELETTE NON FINALISÉ — voir README.md section "Températures extrêmes".
  *
- * Sources consultées : https://portail-api.meteofrance.fr/ (page API DonneesPubliquesObservation),
- * https://meteo.data.gouv.fr/ (dataset "Archive Synop OMM").
+ * Source réelle vérifiée : API Météo-France DPObs v1 (https://public-api.meteofrance.fr/public/DPObs/v1),
+ * gratuite sur inscription à https://portail-api.meteofrance.fr/. Endpoints /liste-stations-synop
+ * et /station/horaire confirmés existants. Deux points restent à vérifier avec un compte réel
+ * (non vérifiables sans authentification) : le flux exact d'échange clé→token, et le nom/unité
+ * exact du champ température dans la réponse /station/horaire.
+ *
+ * Écrit désormais via l'API OVH (ovhApi.extremesEnregistrer) au lieu de Prisma direct,
+ * puisque la base n'est joignable que depuis le réseau OVH.
  */
 
 const BASE_URL = 'https://public-api.meteofrance.fr/public/DPObs/v1';
@@ -30,8 +24,6 @@ interface StationSynop {
   nom: string;
   departement: string;
   altitude: number;
-  latitude: number;
-  longitude: number;
 }
 
 interface MesureExtreme {
@@ -47,23 +39,14 @@ interface MesureExtreme {
 
 async function obtenirToken(): Promise<string> {
   const clePlication = process.env.METEOFRANCE_API_KEY;
-  if (!clePlication) {
-    throw new Error('METEOFRANCE_API_KEY manquante dans les variables d\'environnement');
-  }
+  if (!clePlication) throw new Error('METEOFRANCE_API_KEY manquante');
 
   const reponse = await fetch(TOKEN_URL, {
     method: 'POST',
-    headers: {
-      Authorization: `Basic ${clePlication}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
+    headers: { Authorization: `Basic ${clePlication}`, 'Content-Type': 'application/x-www-form-urlencoded' },
     body: 'grant_type=client_credentials',
   });
-
-  if (!reponse.ok) {
-    throw new Error(`Échec obtention token Météo-France : ${reponse.status}`);
-  }
-
+  if (!reponse.ok) throw new Error(`Échec obtention token Météo-France : ${reponse.status}`);
   const donnees = await reponse.json();
   return donnees.access_token;
 }
@@ -72,42 +55,25 @@ async function listerStationsSynop(token: string): Promise<StationSynop[]> {
   const reponse = await fetch(`${BASE_URL}/liste-stations-synop?format=json`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-
-  if (!reponse.ok) {
-    throw new Error(`Échec liste-stations-synop : ${reponse.status}`);
-  }
-
+  if (!reponse.ok) throw new Error(`Échec liste-stations-synop : ${reponse.status}`);
   const donnees = await reponse.json();
 
-  // ⚠️ Mapping des champs à confirmer contre une vraie réponse (noms de champs non vérifiés).
   return (donnees as any[]).map((s) => ({
     id: String(s.id ?? s.id_station),
     nom: s.nom ?? s.name,
     departement: s.departement ?? s.dep ?? '',
     altitude: Number(s.altitude ?? s.alti ?? 0),
-    latitude: Number(s.latitude ?? s.lat),
-    longitude: Number(s.longitude ?? s.lon),
   }));
 }
 
-async function recupererExtremesStation(
-  token: string,
-  station: StationSynop,
-  dateJour: string
-): Promise<MesureExtreme[]> {
+async function recupererExtremesStation(token: string, station: StationSynop, dateJour: string): Promise<MesureExtreme[]> {
   const reponse = await fetch(
     `${BASE_URL}/station/horaire?id_station=${station.id}&date=${dateJour}T00:00:00Z&format=json`,
     { headers: { Authorization: `Bearer ${token}` } }
   );
-
-  if (!reponse.ok) {
-    throw new Error(`Échec station/horaire pour ${station.id} : ${reponse.status}`);
-  }
-
+  if (!reponse.ok) throw new Error(`Échec station/horaire pour ${station.id} : ${reponse.status}`);
   const observations = await reponse.json();
 
-  // ⚠️ Le champ température exact (ex: "t" en Kelvin selon convention SYNOP habituelle,
-  // à convertir en °C : °C = K - 273.15) est à confirmer contre la réponse réelle.
   const temperatures: { valeurC: number; heure: string }[] = (observations as any[])
     .filter((o) => o.t != null)
     .map((o) => ({ valeurC: Number(o.t) - 273.15, heure: o.reference_time ?? o.date }));
@@ -116,7 +82,6 @@ async function recupererExtremesStation(
 
   const maxi = temperatures.reduce((a, b) => (b.valeurC > a.valeurC ? b : a));
   const mini = temperatures.reduce((a, b) => (b.valeurC < a.valeurC ? b : a));
-
   const base = {
     codeStation: station.id,
     nomCommune: station.nom,
@@ -135,19 +100,16 @@ async function recupererDonneesStations(): Promise<MesureExtreme[]> {
   const token = await obtenirToken();
   const stations = await listerStationsSynop(token);
   const stationsBasseAltitude = stations.filter((s) => s.altitude < ALTITUDE_MAX_M);
-
   const dateJour = new Date().toISOString().slice(0, 10);
   const resultats: MesureExtreme[] = [];
 
   for (const station of stationsBasseAltitude) {
     try {
-      const extremes = await recupererExtremesStation(token, station, dateJour);
-      resultats.push(...extremes);
+      resultats.push(...(await recupererExtremesStation(token, station, dateJour)));
     } catch (erreur) {
       console.error(`Station ${station.id} ignorée :`, erreur);
     }
   }
-
   return resultats;
 }
 
@@ -157,48 +119,19 @@ async function main() {
   for (let tentative = 1; tentative <= MAX_TENTATIVES; tentative++) {
     try {
       const donnees = await recupererDonneesStations();
-      const aujourdHui = new Date();
-      aujourdHui.setHours(0, 0, 0, 0);
-
-      for (const d of donnees) {
-        const station = await prisma.stationMeteo.upsert({
-          where: { codeStation: d.codeStation },
-          update: { nomCommune: d.nomCommune, departement: d.departement, altitudeM: d.altitudeM },
-          create: {
-            codeStation: d.codeStation,
-            nomCommune: d.nomCommune,
-            departement: d.departement,
-            altitudeM: d.altitudeM,
-          },
-        });
-
-        await prisma.temperatureExtremeJour.upsert({
-          where: { uniq_station_date_type: { stationId: station.id, date: aujourdHui, type: d.type } },
-          update: { valeurC: d.valeurC, source: d.source, fetchedAt: new Date() },
-          create: { stationId: station.id, date: aujourdHui, type: d.type, valeurC: d.valeurC, source: d.source },
-        });
-      }
-
-      await prisma.syncLog.create({
-        data: { tache: 'meteo_extremes', statut: 'ok', message: `${donnees.length} mesures synchronisées` },
-      });
-      console.log(`OK — ${donnees.length} mesures synchronisées`);
-      await prisma.$disconnect();
+      const { compte } = await ovhApi.extremesEnregistrer(donnees as unknown as Record<string, unknown>[]);
+      await ovhApi.syncLogEnregistrer('meteo_extremes', 'ok', `${compte} mesures synchronisées`);
+      console.log(`OK — ${compte} mesures synchronisées`);
       return;
     } catch (erreur) {
       derniereErreur = erreur;
       console.error(`Tentative ${tentative}/${MAX_TENTATIVES} échouée`, erreur);
-      if (tentative < MAX_TENTATIVES) {
-        await new Promise((r) => setTimeout(r, tentative * 5000));
-      }
+      if (tentative < MAX_TENTATIVES) await new Promise((r) => setTimeout(r, tentative * 5000));
     }
   }
 
-  await prisma.syncLog.create({
-    data: { tache: 'meteo_extremes', statut: 'erreur', message: String(derniereErreur) },
-  });
+  await ovhApi.syncLogEnregistrer('meteo_extremes', 'erreur', String(derniereErreur)).catch(() => {});
   console.error('Échec définitif après', MAX_TENTATIVES, 'tentatives');
-  await prisma.$disconnect();
   process.exitCode = 1;
 }
 

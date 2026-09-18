@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 
-import { prisma } from '@/lib/db/prisma';
+import { ovhApi } from '@/lib/db/ovh-api-client';
 import { revalidatePath } from 'next/cache';
 
 async function enregistrerSaint(formData: FormData) {
@@ -18,10 +18,8 @@ async function enregistrerSaint(formData: FormData) {
 
   if (!nomPrincipal || !source || !mois || !jour) return;
 
-  await prisma.saint.upsert({
-    where: { uniq_jour: { mois, jour } },
-    update: { nomPrincipal, presentationHistorique, autresPrenoms, patronage, traditions, source, verifie },
-    create: { mois, jour, nomPrincipal, presentationHistorique, autresPrenoms, patronage, traditions, source, verifie },
+  await ovhApi.saintEnregistrer({
+    mois, jour, nomPrincipal, presentationHistorique, autresPrenoms, patronage, traditions, source, verifie,
   });
 
   const m = String(mois).padStart(2, '0');
@@ -32,7 +30,8 @@ async function enregistrerSaint(formData: FormData) {
 }
 
 export default async function GestionSaints() {
-  const saints = await prisma.saint.findMany({ orderBy: [{ mois: 'asc' }, { jour: 'asc' }] });
+  const saints = await ovhApi.saintsListe();
+  const saintsTries = [...saints].sort((a, b) => a.mois - b.mois || a.jour - b.jour);
 
   return (
     <main>
@@ -65,10 +64,10 @@ export default async function GestionSaints() {
           </tr>
         </thead>
         <tbody>
-          {saints.map((s) => (
+          {saintsTries.map((s) => (
             <tr key={s.id}>
               <td>{String(s.jour).padStart(2, '0')}/{String(s.mois).padStart(2, '0')}</td>
-              <td>{s.nomPrincipal}</td>
+              <td>{s.nom_principal}</td>
               <td>{s.source}</td>
               <td>{s.verifie ? '✅' : '⚠️'}</td>
             </tr>

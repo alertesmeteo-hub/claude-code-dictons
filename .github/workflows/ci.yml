@@ -16,10 +16,9 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      - run: npx prisma generate
-        env:
-          DATABASE_URL: 'mysql://user:pass@localhost:3306/db' # factice, generate n'a pas besoin d'une vraie connexion
       - run: npm test
       - run: npm run build
         env:
           NEXT_PUBLIC_SITE_URL: 'https://dicton-du-jour.alertes-meteo.com'
+          OVH_API_URL: 'https://example.invalid/dicton-api' # factice, le build ne fait pas d'appel réseau réel
+          OVH_API_TOKEN: 'factice'

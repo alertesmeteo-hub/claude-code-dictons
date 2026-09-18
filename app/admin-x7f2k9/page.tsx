@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 
-import { prisma } from '@/lib/db/prisma';
+import { ovhApi } from '@/lib/db/ovh-api-client';
 import { revalidatePath } from 'next/cache';
 import Link from 'next/link';
 
@@ -12,11 +12,11 @@ async function republierJour(formData: FormData) {
 }
 
 export default async function TableauDeBordAdmin() {
-  const [derniersLogs, nbSaints, nbDictons, nbTemperatures] = await Promise.all([
-    prisma.syncLog.findMany({ orderBy: { createdAt: 'desc' }, take: 5 }),
-    prisma.saint.count(),
-    prisma.dicton.count(),
-    prisma.temperatureExtremeJour.count(),
+  const [derniersLogs, saints, dictons, extremes] = await Promise.all([
+    ovhApi.syncLogsListe(5),
+    ovhApi.saintsListe(),
+    ovhApi.dictonsListe(),
+    ovhApi.extremesFrance().catch(() => ({ date: '', donnees: [] })),
   ]);
 
   const aujourdHui = new Date();
@@ -32,9 +32,9 @@ export default async function TableauDeBordAdmin() {
       <section>
         <h2>Contenu</h2>
         <ul>
-          <li>{nbSaints} saints enregistrés</li>
-          <li>{nbDictons} dictons enregistrés</li>
-          <li>{nbTemperatures} mesures de températures extrêmes enregistrées</li>
+          <li>{saints.length} saints enregistrés</li>
+          <li>{dictons.length} dictons enregistrés</li>
+          <li>{extremes.donnees.length} mesures de températures extrêmes aujourd&apos;hui</li>
         </ul>
       </section>
 
@@ -43,7 +43,7 @@ export default async function TableauDeBordAdmin() {
           <h2>⚠️ Erreur récente</h2>
           <p>
             La dernière synchronisation des températures extrêmes a échoué le{' '}
-            {dernierEchecMeteo.createdAt.toLocaleString('fr-FR')} : {dernierEchecMeteo.message}
+            {new Date(dernierEchecMeteo.created_at).toLocaleString('fr-FR')} : {dernierEchecMeteo.message}
           </p>
           <Link href="/admin-x7f2k9/logs">Voir le journal complet</Link>
         </section>
@@ -76,7 +76,7 @@ export default async function TableauDeBordAdmin() {
               <tr key={log.id}>
                 <td>{log.tache}</td>
                 <td>{log.statut}</td>
-                <td>{log.createdAt.toLocaleString('fr-FR')}</td>
+                <td>{new Date(log.created_at).toLocaleString('fr-FR')}</td>
                 <td>{log.message}</td>
               </tr>
             ))}

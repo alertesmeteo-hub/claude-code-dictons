@@ -1,32 +1,25 @@
 export const dynamic = 'force-dynamic';
 
-import { prisma } from '@/lib/db/prisma';
+import { ovhApi } from '@/lib/db/ovh-api-client';
 import { revalidatePath } from 'next/cache';
 
 async function ajouterDicton(formData: FormData) {
   'use server';
 
   const texte = String(formData.get('texte') ?? '').trim();
-  const type = String(formData.get('type') ?? 'dicton') as
-    | 'dicton'
-    | 'proverbe'
-    | 'dicton_meteo'
-    | 'dicton_paysan'
-    | 'adage';
+  const type = String(formData.get('type') ?? 'dicton');
   const moisRaw = formData.get('mois');
   const jourRaw = formData.get('jour');
   const source = String(formData.get('source') ?? '').trim() || null;
 
   if (!texte) return;
 
-  await prisma.dicton.create({
-    data: {
-      texte,
-      type,
-      mois: moisRaw ? Number(moisRaw) : null,
-      jour: jourRaw ? Number(jourRaw) : null,
-      source,
-    },
+  await ovhApi.dictonAjouter({
+    texte,
+    type,
+    mois: moisRaw ? Number(moisRaw) : null,
+    jour: jourRaw ? Number(jourRaw) : null,
+    source,
   });
 
   revalidatePath('/admin-x7f2k9/dictons');
@@ -35,14 +28,12 @@ async function ajouterDicton(formData: FormData) {
 async function basculerActif(formData: FormData) {
   'use server';
   const id = Number(formData.get('id'));
-  const dicton = await prisma.dicton.findUnique({ where: { id } });
-  if (!dicton) return;
-  await prisma.dicton.update({ where: { id }, data: { actif: !dicton.actif } });
+  await ovhApi.dictonBasculerActif(id);
   revalidatePath('/admin-x7f2k9/dictons');
 }
 
 export default async function GestionDictons() {
-  const dictons = await prisma.dicton.findMany({ orderBy: { id: 'desc' } });
+  const dictons = await ovhApi.dictonsListe();
 
   return (
     <main>
@@ -85,7 +76,7 @@ export default async function GestionDictons() {
             <tr key={d.id} style={{ opacity: d.actif ? 1 : 0.5 }}>
               <td>{d.texte}</td>
               <td>{d.type}</td>
-              <td>{d.mois && d.jour ? `${String(d.jour).padStart(2, '0')}/${String(d.mois).padStart(2, '0')}` : 'toute l\'année'}</td>
+              <td>{d.mois && d.jour ? `${String(d.jour).padStart(2, '0')}/${String(d.mois).padStart(2, '0')}` : "toute l'année"}</td>
               <td>{d.actif ? 'Oui' : 'Non'}</td>
               <td>
                 <form action={basculerActif}>

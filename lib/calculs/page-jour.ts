@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/db/prisma';
+import { ovhApi } from '@/lib/db/ovh-api-client';
 import { calculerInfosJourAnnee } from '@/lib/calculs/jour-annee';
 import { signeZodiaque, signeAstrologieChinoise } from '@/lib/calculs/zodiaque';
 import { convertirEnCalendrierRepublicain } from '@/lib/calculs/calendrier-republicain';
@@ -20,37 +20,29 @@ export interface ContenuJour {
 }
 
 /**
- * Assemble le contenu déterministe + éditorial d'une date donnée.
- * Ne fait AUCUN appel météo (géré séparément côté client via /api/v1/meteo,
- * car dépendant de la géoloc du visiteur, pas de la date seule).
+ * Assemble le contenu déterministe (calculé localement) + éditorial (via l'API OVH,
+ * seul point d'accès à la base MySQL bijouxdealertes depuis l'extérieur du réseau OVH).
+ * Ne fait AUCUN appel météo (géré séparément côté client via /api/v1/meteo).
  */
 export async function construireContenuJour(date: Date): Promise<ContenuJour> {
-  const mois = date.getMonth() + 1;
-  const jour = date.getDate();
-
-  const [saint, dictonsDuJour, dictonsGeneriques] = await Promise.all([
-    prisma.saint.findUnique({ where: { uniq_jour: { mois, jour } } }),
-    prisma.dicton.findMany({ where: { mois, jour, actif: true } }),
-    prisma.dicton.findMany({ where: { mois: null, jour: null, actif: true }, take: 5 }),
-  ]);
-
-  const dictonsRetenus = dictonsDuJour.length > 0 ? dictonsDuJour : dictonsGeneriques;
+  const dateStr = date.toISOString().slice(0, 10);
+  const { saint, dictons } = await ovhApi.jourContenu(dateStr);
 
   return {
-    date: date.toISOString().slice(0, 10),
+    date: dateStr,
     infosJourAnnee: calculerInfosJourAnnee(date),
     zodiaque: signeZodiaque(date),
     astrologieChinoise: signeAstrologieChinoise(date),
     calendrierRepublicain: convertirEnCalendrierRepublicain(date),
     saint: saint
       ? {
-          nomPrincipal: saint.nomPrincipal,
-          presentationHistorique: saint.presentationHistorique,
-          autresPrenoms: saint.autresPrenoms,
+          nomPrincipal: saint.nom_principal,
+          presentationHistorique: saint.presentation_historique,
+          autresPrenoms: saint.autres_prenoms,
           patronage: saint.patronage,
           traditions: saint.traditions,
         }
       : null,
-    dictons: dictonsRetenus.map((d) => ({ texte: d.texte, type: d.type })),
+    dictons,
   };
 }

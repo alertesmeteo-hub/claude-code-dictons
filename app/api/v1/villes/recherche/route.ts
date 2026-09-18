@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db/prisma';
+import { ovhApi } from '@/lib/db/ovh-api-client';
 
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get('q')?.trim();
@@ -8,17 +8,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ resultats: [] });
   }
 
-  const villes = await prisma.ville.findMany({
-    where: { nom: { startsWith: q } },
-    take: 10,
-    select: { nom: true, departement: true, slug: true, latitude: true, longitude: true },
-  });
-
-  return NextResponse.json({
-    resultats: villes.map((v) => ({
-      ...v,
-      latitude: Number(v.latitude),
-      longitude: Number(v.longitude),
-    })),
-  });
+  try {
+    const villes = await ovhApi.villesRecherche(q);
+    return NextResponse.json({
+      resultats: villes.map((v) => ({
+        nom: v.nom,
+        departement: v.departement,
+        slug: v.slug,
+        latitude: Number(v.latitude),
+        longitude: Number(v.longitude),
+      })),
+    });
+  } catch (erreur) {
+    console.error('Erreur recherche villes', erreur);
+    return NextResponse.json({ resultats: [] });
+  }
 }

@@ -1,9 +1,9 @@
 export const dynamic = 'force-dynamic';
 
-import { prisma } from '@/lib/db/prisma';
+import { ovhApi } from '@/lib/db/ovh-api-client';
 
 export default async function JournalTaches() {
-  const logs = await prisma.syncLog.findMany({ orderBy: { createdAt: 'desc' }, take: 100 });
+  const logs = await ovhApi.syncLogsListe(100);
 
   return (
     <main>
@@ -22,7 +22,7 @@ export default async function JournalTaches() {
         <tbody>
           {logs.map((log) => (
             <tr key={log.id} className={`log-${log.statut}`}>
-              <td>{log.createdAt.toLocaleString('fr-FR')}</td>
+              <td>{new Date(log.created_at).toLocaleString('fr-FR')}</td>
               <td>{log.tache}</td>
               <td>{log.statut}</td>
               <td>{log.message}</td>
