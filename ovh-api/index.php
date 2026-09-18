@@ -25,10 +25,20 @@ function repondre($donnees, $code = 200) {
 }
 
 function verifierToken() {
-	$headers = getallheaders();
-	$auth = $headers['Authorization'] ?? '';
+	// Sur certains hébergements mutualisés (PHP en CGI/FastCGI), l'en-tête Authorization
+	// n'arrive pas via getallheaders() : on regarde aussi les variantes $_SERVER en repli.
+	$auth = '';
+	$headers = function_exists('getallheaders') ? getallheaders() : [];
+	if (!empty($headers['Authorization'])) {
+		$auth = $headers['Authorization'];
+	} elseif (!empty($_SERVER['HTTP_AUTHORIZATION'])) {
+		$auth = $_SERVER['HTTP_AUTHORIZATION'];
+	} elseif (!empty($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+		$auth = $_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
+	}
+
 	if (!preg_match('/^Bearer\s+(.+)$/', $auth, $m) || !hash_equals(DICTON_API_TOKEN, $m[1])) {
-		repondre(['erreur' => 'Non autorisé'], 401);
+		repondre(['erreur' => 'Non autorisé', 'debug' => $auth === '' ? 'en-tete absent' : 'jeton invalide'], 401);
 	}
 }
 verifierToken();

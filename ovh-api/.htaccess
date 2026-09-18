@@ -1,0 +1,13 @@
+# Force la transmission de l'en-tête Authorization au script PHP,
+# souvent filtré par défaut sur les hébergements mutualisés (PHP en CGI/FastCGI).
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTP:Authorization} ^(.*)
+  RewriteRule .* - [E=HTTP_AUTHORIZATION:%1]
+</IfModule>
+
+<IfModule mod_setenvif.c>
+  SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+</IfModule>
+
+CGIPassAuth On
