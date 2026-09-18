@@ -37,9 +37,13 @@ function getDb() {
 	static $mysqli = null;
 	if ($mysqli instanceof mysqli) return $mysqli;
 
+	// Depuis PHP 8.1, mysqli lance des exceptions par défaut sur les erreurs ;
+	// on repasse en mode "erreur silencieuse" pour garder nos réponses JSON contrôlées.
+	mysqli_report(MYSQLI_REPORT_OFF);
+
 	$mysqli = @mysqli_connect(DICTMETEO_DB_HOST, DICTMETEO_DB_USER, DICTMETEO_DB_PASSWORD, DICTMETEO_DB_NAME);
 	if (!$mysqli) {
-		repondre(['erreur' => 'Connexion base de données impossible'], 503);
+		repondre(['erreur' => 'Connexion base de données impossible : ' . mysqli_connect_error()], 503);
 	}
 	mysqli_set_charset($mysqli, 'utf8mb4');
 	return $mysqli;
