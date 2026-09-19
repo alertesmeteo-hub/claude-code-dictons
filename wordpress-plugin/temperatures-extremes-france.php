@@ -62,7 +62,7 @@ function tef_recuperer_donnees() {
 function tef_shortcode_temperatures_extremes( $atts ) {
 	$atts = shortcode_atts(
 		array(
-			'limite' => 6,
+			'limite' => 3,
 		),
 		$atts,
 		'temperatures_extremes_france'
@@ -79,7 +79,11 @@ function tef_shortcode_temperatures_extremes( $atts ) {
 		<?php else : ?>
 			<ul class="tef-liste">
 				<?php
-				$lignes = array_slice( $donnees['donnees'], 0, (int) $atts['limite'] );
+				// « limite » = nombre de stations affichées pour les maxima ET pour les minima.
+				$limite = max( 1, (int) $atts['limite'] );
+				$maxis  = array_slice( array_values( array_filter( $donnees['donnees'], function ( $l ) { return 'maxi' === $l['type']; } ) ), 0, $limite );
+				$minis  = array_slice( array_values( array_filter( $donnees['donnees'], function ( $l ) { return 'mini' === $l['type']; } ) ), 0, $limite );
+				$lignes = array_merge( $maxis, $minis );
 				foreach ( $lignes as $ligne ) :
 					$type_libelle = 'maxi' === $ligne['type'] ? 'MAXI' : 'MINI';
 					?>

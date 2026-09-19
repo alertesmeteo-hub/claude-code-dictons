@@ -18,7 +18,8 @@ export async function GET() {
       {
         date,
         derniereMiseAJour: derniereMaj,
-        donnees: donnees.map((e) => ({
+        // maxima du plus chaud au moins chaud, puis minima du plus froid au moins froid
+        donnees: [...donnees].sort((a, b) => (a.type === b.type ? (a.type === 'maxi' ? Number(b.valeur_c) - Number(a.valeur_c) : Number(a.valeur_c) - Number(b.valeur_c)) : a.type === 'maxi' ? -1 : 1)).map((e) => ({
           type: e.type,
           commune: e.nom_commune,
           departement: e.departement,
