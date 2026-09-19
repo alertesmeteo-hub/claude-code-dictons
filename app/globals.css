@@ -372,3 +372,17 @@ th, td {
     --couleur-bordure: #334155;
   }
 }
+
+.pied-site {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 16px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.pied-site a {
+  color: var(--couleur-accent);
+  text-decoration: none;
+}
