@@ -78,8 +78,10 @@ html {
 }
 
 .navigation-jour-date {
-  font-weight: 600;
-  margin: 0 0 4px;
+  font-size: clamp(1.6rem, 6vw, 2.4rem);
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0 0 6px;
 }
 
 .navigation-jour-fil {

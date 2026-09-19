@@ -115,7 +115,7 @@ export default async function PageJour({ params }: { params: Promise<Params> }) 
               <ul>
                 {contenu.fete.autresFetes.slice(0, 8).map((f) => (
                   <li key={f.url}>
-                    <a href={f.url} rel="noopener">{f.nom}</a>
+                    {f.nom}
                     {f.description ? ` — ${f.description}` : ''}
                   </li>
                 ))}
@@ -170,7 +170,7 @@ export default async function PageJour({ params }: { params: Promise<Params> }) 
           <ul>
             {evenements.map((e, i) => (
               <li key={i}>
-                <strong>{e.annee}</strong> — {e.url ? <a href={e.url} rel="noopener">{e.texte}</a> : e.texte}
+                <strong>{e.annee}</strong> — {e.texte}
               </li>
             ))}
           </ul>

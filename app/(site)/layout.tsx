@@ -1,12 +1,12 @@
 import Link from 'next/link';
 
 const ENTREES = [
-  { libelle: 'Éphéméride', href: '/' },
-  { libelle: 'Date du jour', href: '/#date-du-jour' },
-  { libelle: 'Saint du jour', href: '/#saint-du-jour' },
   { libelle: 'Fête du jour', href: '/#fete-du-jour' },
+  { libelle: 'Dictons, proverbes', href: '/#dictons' },
+  { libelle: 'Météo locale', href: '/#meteo-locale' },
+  { libelle: 'Cycle lunaire', href: '/#cycle-lunaire' },
+  { libelle: 'Événements historiques', href: '/#evenements-historiques' },
   { libelle: 'Jours fériés', href: '/jours-feries' },
-  { libelle: 'Lever du soleil', href: '/#meteo-locale' },
 ];
 
 export default function LayoutSite({ children }: { children: React.ReactNode }) {
