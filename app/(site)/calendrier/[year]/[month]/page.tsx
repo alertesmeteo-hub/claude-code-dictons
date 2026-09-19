@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import { ovhApi, type SaintApi } from '@/lib/db/ovh-api-client';
 import {
   construireCalendrierMois,
+  type JourCalendrier,
   JOURS_SEMAINE,
   MOIS,
   PHASES,
@@ -45,6 +46,17 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
     description: `Calendrier de ${libelleMois(p.annee, p.mois)} à imprimer : jours fériés, saints du jour, fêtes populaires, phases de la Lune et numéros de semaine.`,
   };
 }
+
+const infobulle = (c: JourCalendrier, saint: SaintApi | undefined) =>
+  [
+    `${c.jour} ${MOIS[Number(c.cle.slice(5, 7)) - 1]}`,
+    saint ? `Saint du jour : ${saint.nom_principal}` : null,
+    c.ferie ? `Jour férié : ${c.ferie}` : null,
+    ...c.populaires.map((f) => `${f.emoji} ${f.nom}`),
+    ...c.phases.map((ph) => `${PHASES[ph.type].emoji} ${PHASES[ph.type].libelle} à ${ph.heure}`),
+  ]
+    .filter(Boolean)
+    .join(' — ');
 
 const nomCourt = (s: SaintApi | undefined) => (s ? s.nom_principal.replace(/^(saint|sainte|saints|bienheureux|bienheureuse)\s+/i, '') : '');
 
@@ -95,7 +107,7 @@ export default async function PageCalendrier({ params }: { params: Promise<Param
                 {s.cases.map((c, i) =>
                   c ? (
                     <td key={c.cle} className={`${i >= 5 ? 'weekend' : ''} ${c.ferie ? 'ferie' : ''}`.trim()}>
-                      <Link href={`/${c.cle.replaceAll('-', '/')}/`} className="case-jour">
+                      <Link href={`/${c.cle.replaceAll('-', '/')}/`} className="case-jour" title={infobulle(c, saintDuJour(c.jour))}>
                         <span className="numero-jour">
                           {c.jour}
                           <span aria-hidden="true" className="icones-jour">
