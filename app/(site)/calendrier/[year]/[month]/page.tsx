@@ -57,11 +57,11 @@ export default async function PageCalendrier({ params }: { params: Promise<Param
 
   let saints: SaintApi[] = [];
   try {
-    saints = (await ovhApi.saintsListe()).filter((s) => s.mois === p.mois);
+    saints = (await ovhApi.saintsListe()).filter((s) => Number(s.mois) === p.mois);
   } catch {
     // le calendrier reste affiché sans les prénoms si l'API est indisponible
   }
-  const saintDuJour = (j: number) => saints.find((s) => s.jour === j);
+  const saintDuJour = (j: number) => saints.find((s) => Number(s.jour) === j);
 
   return (
     <main className="page-jour calendrier">
