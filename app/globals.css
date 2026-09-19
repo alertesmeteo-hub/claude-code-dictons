@@ -66,7 +66,7 @@ html {
 .page-jour {
   max-width: 680px;
   margin: 0 auto;
-  padding: 16px 16px 60vh;
+  padding: 16px;
 }
 
 .page-jour section {
@@ -248,6 +248,9 @@ html {
     background: #fff;
     color: #000;
   }
+  .pied-site {
+    padding-bottom: 0;
+  }
   .page-jour {
     max-width: none;
     padding: 0;
@@ -376,7 +379,7 @@ th, td {
 .pied-site {
   max-width: 980px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 16px 16px 45vh;
   text-align: center;
   font-size: 0.8rem;
   color: #64748b;
