@@ -66,7 +66,7 @@ html {
 .page-jour {
   max-width: 680px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 16px 16px 60vh;
 }
 
 .page-jour section {

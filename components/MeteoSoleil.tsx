@@ -149,6 +149,15 @@ export default function MeteoSoleil({ date, saisons }: { date: string; saisons: 
         </div>
       )}
 
+      <p>
+        <a href="https://alertes-meteo.com/modeles/multi-modeles/" rel="noopener">Texte météo jusqu&apos;à 15 jours</a>
+      </p>
+      <p>
+        <a href="https://alertes-meteo.systeme.io/meteodujour" rel="noopener">
+          Recevez chaque matin l&apos;essentiel de la météo par email.
+        </a>
+      </p>
+
       <h3>🍃 Saison météo et saison calendrier</h3>
       <ul>
         <li>
