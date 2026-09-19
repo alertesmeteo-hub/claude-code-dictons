@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Températures Extrêmes France
  * Description: Affiche les températures extrêmes du jour en France (stations sous 500 m) via le shortcode [temperatures_extremes_france]. Consomme l'API du SaaS dicton-du-jour.alertes-meteo.com, ne duplique aucune logique météo.
- * Version: 1.0.1
+ * Version: 1.0.2
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: Alertes Météo
@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'TEF_VERSION', '1.0.1' );
+define( 'TEF_VERSION', '1.0.2' );
 define( 'TEF_CACHE_KEY', 'tef_extremes_france' );
 define( 'TEF_CACHE_DUREE', 15 * MINUTE_IN_SECONDS );
 define( 'TEF_TIMEOUT_SECONDES', 5 );
@@ -73,7 +73,7 @@ function tef_shortcode_temperatures_extremes( $atts ) {
 	ob_start();
 	?>
 	<div class="tef-widget">
-		<h3 class="tef-titre">Températures extrêmes du jour en France — stations sous 500 m</h3>
+		<h3 class="tef-titre">Températures extrêmes du jour — stations sous 500 m</h3>
 		<?php if ( false === $donnees || empty( $donnees['donnees'] ) ) : ?>
 			<p class="tef-fallback">Données momentanément indisponibles. Réessayez plus tard.</p>
 		<?php else : ?>
