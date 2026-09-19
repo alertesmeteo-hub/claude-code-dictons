@@ -7,7 +7,7 @@ import { ovhApi } from '../lib/db/ovh-api-client';
  * Source réelle vérifiée : API Météo-France DPObs v1 (https://public-api.meteofrance.fr/public/DPObs/v1),
  * gratuite sur inscription à https://portail-api.meteofrance.fr/. Endpoints /liste-stations-synop
  * et /station/horaire confirmés existants. Deux points restent à vérifier avec un compte réel
- * (non vérifiables sans authentification) : le flux exact d'échange clé→token, et le nom/unité
+ * (non vérifiables sans authentification) : l'obtention d'une clé API valide (en-tête apikey), et le nom/unité
  * exact du champ température dans la réponse /station/horaire.
  *
  * Écrit désormais via l'API OVH (ovhApi.extremesEnregistrer) au lieu de Prisma direct,
@@ -15,7 +15,6 @@ import { ovhApi } from '../lib/db/ovh-api-client';
  */
 
 const BASE_URL = 'https://public-api.meteofrance.fr/public/DPObs/v1';
-const TOKEN_URL = 'https://portail-api.meteofrance.fr/token';
 const ALTITUDE_MAX_M = 500;
 const MAX_TENTATIVES = 3;
 
@@ -37,26 +36,33 @@ interface MesureExtreme {
   source: string;
 }
 
-async function obtenirToken(): Promise<string> {
-  const clePlication = process.env.METEOFRANCE_API_KEY;
-  if (!clePlication) throw new Error('METEOFRANCE_API_KEY manquante');
-
-  const reponse = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: { Authorization: `Basic ${clePlication}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'grant_type=client_credentials',
-  });
-  if (!reponse.ok) throw new Error(`Échec obtention token Météo-France : ${reponse.status}`);
-  const donnees = await reponse.json();
-  return donnees.access_token;
+/**
+ * Authentification : la passerelle (WSO2) accepte une clé d'API générée sur le portail dans l'en-tête `apikey`
+ * (vérifié : elle liste `apikey` parmi les en-têtes autorisés et répond 401 JSON sans clé valide).
+ * L'ancien flux OAuth « /token » était rejeté par le pare-feu de Météo-France (page HTML « Request Rejected »).
+ * → Sur le portail, créer une application, s'abonner à DPObs, puis générer une « clé API » (et non un jeton OAuth2).
+ */
+function enTetes(): Record<string, string> {
+  const cle = process.env.METEOFRANCE_API_KEY;
+  if (!cle) throw new Error('METEOFRANCE_API_KEY manquante');
+  return { apikey: cle, Accept: 'application/json' };
 }
 
-async function listerStationsSynop(token: string): Promise<StationSynop[]> {
+async function lireJson(reponse: Response, contexte: string): Promise<unknown> {
+  const texte = await reponse.text();
+  if (!reponse.ok) throw new Error(`${contexte} : HTTP ${reponse.status} ${texte.slice(0, 150)}`);
+  try {
+    return JSON.parse(texte);
+  } catch {
+    throw new Error(`${contexte} : réponse non JSON (${texte.slice(0, 100)})`);
+  }
+}
+
+async function listerStationsSynop(): Promise<StationSynop[]> {
   const reponse = await fetch(`${BASE_URL}/liste-stations-synop?format=json`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: enTetes(),
   });
-  if (!reponse.ok) throw new Error(`Échec liste-stations-synop : ${reponse.status}`);
-  const donnees = await reponse.json();
+  const donnees = await lireJson(reponse, 'liste-stations-synop');
 
   return (donnees as any[]).map((s) => ({
     id: String(s.id ?? s.id_station),
@@ -66,13 +72,12 @@ async function listerStationsSynop(token: string): Promise<StationSynop[]> {
   }));
 }
 
-async function recupererExtremesStation(token: string, station: StationSynop, dateJour: string): Promise<MesureExtreme[]> {
+async function recupererExtremesStation(station: StationSynop, dateJour: string): Promise<MesureExtreme[]> {
   const reponse = await fetch(
     `${BASE_URL}/station/horaire?id_station=${station.id}&date=${dateJour}T00:00:00Z&format=json`,
-    { headers: { Authorization: `Bearer ${token}` } }
+    { headers: enTetes() }
   );
-  if (!reponse.ok) throw new Error(`Échec station/horaire pour ${station.id} : ${reponse.status}`);
-  const observations = await reponse.json();
+  const observations = await lireJson(reponse, `station/horaire ${station.id}`);
 
   const temperatures: { valeurC: number; heure: string }[] = (observations as any[])
     .filter((o) => o.t != null)
@@ -97,15 +102,14 @@ async function recupererExtremesStation(token: string, station: StationSynop, da
 }
 
 async function recupererDonneesStations(): Promise<MesureExtreme[]> {
-  const token = await obtenirToken();
-  const stations = await listerStationsSynop(token);
+  const stations = await listerStationsSynop();
   const stationsBasseAltitude = stations.filter((s) => s.altitude < ALTITUDE_MAX_M);
   const dateJour = new Date().toISOString().slice(0, 10);
   const resultats: MesureExtreme[] = [];
 
   for (const station of stationsBasseAltitude) {
     try {
-      resultats.push(...(await recupererExtremesStation(token, station, dateJour)));
+      resultats.push(...(await recupererExtremesStation(station, dateJour)));
     } catch (erreur) {
       console.error(`Station ${station.id} ignorée :`, erreur);
     }
