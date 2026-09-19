@@ -19,6 +19,8 @@ const ALTITUDE_MAX_M = 500;
 const NB_PAR_TYPE = 15; // nombre de stations conservées pour les maxima et pour les minima
 const PAUSE_ENTRE_APPELS_MS = 1500;
 const MAX_TENTATIVES = 3;
+/** Codes à essayer, dans l'ordre, pour les départements dont l'écriture n'est pas évidente. */
+const VARIANTES_DEPARTEMENT: Record<string, string[]> = { '20': ['2A', '2B', '20'] };
 
 interface Station {
   id: string;
@@ -95,9 +97,10 @@ type Extreme = { v: number; iso: string };
 async function extremesDuJour(): Promise<Mesure[]> {
   const stations = await listerStations();
   const parId = new Map(stations.map((s) => [s.id, s]));
-  // Métropole : départements 01-95 ; la Corse (préfixe 20) s'interroge en 2A / 2B.
+  // Métropole : départements 01-95. Les stations corses ont le préfixe 20 (2A et 2B) : le code accepté par
+  // l'API n'est pas documenté, on essaie plusieurs écritures (voir VARIANTES_DEPARTEMENT).
   const prefixes = [...new Set(stations.map((s) => s.departement))].filter((p) => /^\d\d$/.test(p) && Number(p) <= 95);
-  const departements = prefixes.flatMap((p) => (p === '20' ? ['2A', '2B'] : [p])).sort();
+  const departements = prefixes.sort();
 
   const aujourdhui = jourParis(new Date().toISOString());
   const maxi = new Map<string, Extreme>();
@@ -106,21 +109,26 @@ async function extremesDuJour(): Promise<Mesure[]> {
 
   for (const dep of departements) {
     try {
-      // Selon les départements, l'API attend « 01 » ou « 1 » : on essaie les deux écritures.
-      const ecritures = [...new Set([dep, dep.replace(/^0/, '')])];
-      let brut = '';
+      // Selon les départements, l'API attend « 01 » ou « 1 » : on s'arrête à la première écriture acceptée.
+      // Corse (20) : 2A et 2B sont deux départements distincts, on cumule toutes les écritures acceptées.
+      const ecritures = [...new Set(VARIANTES_DEPARTEMENT[dep] ?? [dep, dep.replace(/^0/, '')])];
+      const cumul = dep === '20';
+      const obs: Observation[] = [];
       let erreurDep: unknown = null;
+      let accepte = false;
       for (const ecriture of ecritures) {
         try {
-          brut = await get(`${DPPAQUET}/paquet/horaire?id-departement=${ecriture}&format=json`);
-          erreurDep = null;
-          break;
+          const brut = await get(`${DPPAQUET}/paquet/horaire?id-departement=${ecriture}&format=json`);
+          obs.push(...(JSON.parse(brut) as Observation[]));
+          accepte = true;
+          if (cumul) console.log(`Corse : code « ${ecriture} » accepté`);
+          else break;
         } catch (e) {
           erreurDep = e;
         }
+        if (cumul) await pause(PAUSE_ENTRE_APPELS_MS);
       }
-      if (erreurDep) throw erreurDep;
-      const obs = JSON.parse(brut) as Observation[];
+      if (!accepte) throw erreurDep;
       for (const o of obs) {
         if (!parId.has(o.geo_id_insee) || jourParis(o.validity_time) !== aujourdhui) continue;
         const haut = o.tx ?? o.t;

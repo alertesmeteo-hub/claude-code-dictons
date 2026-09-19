@@ -21,22 +21,26 @@ Base MySQL bijouxdealertes (nouvelles tables dédiées, séparées de dictionnai
 
 ## État du projet (MVP)
 
-Implémenté :
-- Pages du jour SSR (`/YYYY/MM/DD/`), redirection `/` → jour courant.
-- Calculs déterministes 100% locaux, testés : jour de l'année, semaine ISO, zodiaque, astrologie chinoise (approximation par année civile), calendrier républicain (approximation, voir commentaire dans le code), lever/coucher du soleil (algorithme NOAA).
-- Météo géolocalisée via Open-Meteo (gratuit, sans clé), avec repli sur recherche manuelle de commune si la géolocalisation est refusée.
-- API PHP intermédiaire (`ovh-api/`) + client TypeScript (`lib/db/ovh-api-client.ts`) — voir section dédiée.
-- API interne du site (`/api/v1/...`) documentée ci-dessous.
-- Sitemap (90 derniers jours) + robots.txt (admin exclue).
-- Jeu de données **365 jours de saints** (Nominis) et **365 jours de dictons** (meteoeu.net) — voir "Sources du contenu éditorial".
-- Plugin WordPress `[temperatures_extremes_france]` (cache, timeout, fallback).
-- Interface d'administration sur `/admin-x7f2k9/` (accès libre, non indexée) : tableau de bord, gestion des saints, gestion des dictons, journal des tâches. **Renommez ce dossier avant déploiement** (voir section Sécurité).
+Implémenté (site en production sur un VPS OVH, voir « Déploiement ») :
+- **Page du jour** `/YYYY/MM/DD/` (SSR) : en-tête « Nous sommes le … » (toujours la date du jour à Paris) avec navigation veille/lendemain, saint du jour, **fête du jour** (prénoms fêtés + autres fêtes, Nominis, et **fêtes populaires** : Saint-Valentin, Fête des Mères…), dictons (entre « »), météo locale et lever/coucher du soleil, **saisons météo et calendrier**, **cycle lunaire** (phase avec icône, apogée/périgée), **événements historiques** (Wikipédia), informations complémentaires (zodiaque, calendrier républicain, prochain jour férié), partage sur les réseaux.
+- **Menu du haut** (`components/MenuSite.tsx`) : ancres vers les blocs de la page du jour, plus **Calendrier**, **Vacances scolaires** et **Jours fériés**.
+- **Calendrier mensuel imprimable** `/calendrier/YYYY/MM/` : grille avec semaines ISO, saints, jours fériés, phases de la Lune, fêtes ; infobulle par jour ; texte de présentation du mois ; aide à l'impression (A4 paysage).
+- **Vacances scolaires** `/vacances-scolaires` : zones A, B, C, données officielles (data.education.gouv.fr).
+- **Jours fériés** `/jours-feries` et `/jours-feries/YYYY`.
+- **Températures extrêmes** : script `cron-extremes-meteo.ts` (Météo-France) + route publique + plugin WordPress `[temperatures_extremes_france]`.
+- Calculs déterministes 100 % locaux, testés (Vitest) : jour de l'année, semaine ISO, zodiaque, astrologie chinoise, calendrier républicain, Pâques et jours fériés, lever/coucher du soleil (NOAA), phases de la Lune et distance Terre-Lune (Meeus ch. 47 et 49), équinoxes et solstices (Meeus ch. 27), fêtes populaires (dates calculées).
+- Météo géolocalisée via Open-Meteo (gratuit, sans clé), avec repli sur recherche manuelle de commune.
+- API PHP intermédiaire (`ovh-api/`) + client TypeScript (`lib/db/ovh-api-client.ts`).
+- Sitemap (90 derniers jours) + robots.txt (admin exclue). Pied de page avec version du module (`package.json`) et date du build.
+- Jeu de données **365 saints** (Nominis), **366 jours de fêtes** (Nominis) et **1 400+ dictons** (meteoeu.net) — voir « Sources du contenu éditorial ».
+- Interface d'administration sur `/admin-x7f2k9/` (accès libre, non indexée). **Renommez ce dossier avant la mise en public** (voir « Sécurité »).
 
-**Non implémenté / à finaliser avant mise en production** :
-- `scripts/cron-extremes-meteo.ts` : branché sur l'API réelle **Météo-France DPObs v1**, endpoints `/liste-stations-synop` + `/station/horaire` confirmés existants. Deux points restent à vérifier avec un compte réel : le flux exact d'échange clé→token (`obtenirToken()`) et le nom/unité exact du champ température (`recupererExtremesStation()`) — annotés `⚠️` dans le fichier.
-- Dictons importés (meteoeu.net) : classés uniformément `dicton_meteo` par défaut (affinable depuis l'admin) ; le 2 août est absent (page source incomplète).
-- Saints importés : `verifie: false` sur les 365 (relecture humaine recommandée) ; pas de champ "autres prénoms fêtés" (absent du flux) ; 29 février absent.
-- `ovh-api/` n'est pas encore déployé sur l'hébergement OVH (voir procédure ci-dessous).
+**À finaliser / connu** :
+- Saints : `verifie: false` sur les 365 (relecture humaine recommandée) ; le 29 février est absent ; 7 fêtes religieuses sans présentation.
+- Dictons : classés `dicton_meteo` par défaut (affinable dans l'admin) ; le 2 août est absent.
+- Extrêmes météo : la Corse (2A/2B) dépend d'un code de département non documenté par l'API (le script en essaie plusieurs et l'écrit dans le journal) ; l'outre-mer n'est pas couvert.
+- Vacances scolaires : zones A/B/C uniquement (ni Corse ni outre-mer) ; les ponts ne sont pas listés.
+- Traduction anglaise : non faite.
 
 ## Stack
 
@@ -86,9 +90,32 @@ npm start
 
 ## Tâches planifiées
 
-Deux options, au choix :
-- **GitHub Actions** (`.github/workflows/cron-jobs.yml`) : fonctionne maintenant sans souci réseau, puisque ces tâches n'appellent que l'API PHP en HTTPS.
-- **Cron sur un serveur** (VPS ou autre) qui héberge le site : `npm run cron:generation-jour` (00:05) et `npm run cron:extremes-meteo` (toutes les 3h).
+- `npm run cron:generation-jour` : trace la génération du jour (00:05).
+- `npm run cron:extremes-meteo` : températures extrêmes du jour. Sur le VPS, une ligne cron toutes les heures (minute 20) avec un verrou pour éviter les chevauchements :
+
+```
+20 * * * * cd /home/ubuntu/claude-code-dictons && flock -n /tmp/extremes.lock /usr/bin/npm run cron:extremes-meteo >> /home/ubuntu/cron-extremes.log 2>&1
+```
+
+Le script lit `METEOFRANCE_API_KEY` dans `.env` : clé de type **API Key** (le jeton OAuth2 expire en 1 h), envoyée dans l'en-tête `apikey`. Attention : une clé fait ~4 800 caractères, plus que la limite d'une ligne collée dans un terminal (4 095) : l'enregistrer dans `.env` avec un éditeur (nano), pas avec `read` ou `echo`.
+
+Sources utilisées (API Météo-France, portail https://portail-api.meteofrance.fr) :
+- **DPObs v1** `/liste-stations` (CSV : identifiant, nom, altitude…) ;
+- **DPPaquetObs v1** `/paquet/horaire?id-departement=XX&format=json` (observations horaires des 24 dernières heures de toutes les stations du département ; `t`, `tx`, `tn` en kelvins).
+
+Un passage = ~95 appels espacés de 1,5 s (2-3 minutes). Le script garde les 15 stations les plus chaudes (maxima) et les 15 les plus froides (minima) sous 500 m d'altitude, et échoue s'il y a plus de 20 % de départements en erreur.
+
+GitHub Actions (`.github/workflows/cron-jobs.yml`) reste disponible ; secrets nécessaires : `OVH_API_URL`, `OVH_API_TOKEN`, `METEOFRANCE_API_KEY`.
+
+## Routes du site
+
+| Route | Contenu |
+|---|---|
+| `/` | Redirige vers le jour courant (heure de Paris) |
+| `/YYYY/MM/DD/` | Page du jour |
+| `/calendrier` , `/calendrier/YYYY/MM/` | Calendrier mensuel imprimable |
+| `/vacances-scolaires` | Vacances scolaires zones A/B/C (cache 24 h) |
+| `/jours-feries` , `/jours-feries/YYYY/` | Jours fériés |
 
 ## API interne (site Next.js)
 
@@ -106,14 +133,16 @@ Toutes les routes nécessitent l'en-tête `Authorization: Bearer <DICTON_API_TOK
 
 | Route | Méthode | Description |
 |---|---|---|
-| `?route=jour&date=YYYY-MM-DD` | GET | Saint + dictons du jour |
+| `?route=jour&date=YYYY-MM-DD` | GET | Saint + dictons + fête du jour |
 | `?route=saints` | GET | Liste complète des saints |
 | `?route=saints` | POST | Créer/mettre à jour un saint |
 | `?route=saints/bulk` | POST | Import en masse (seed initial) |
 | `?route=dictons` | GET | Liste complète des dictons |
 | `?route=dictons` | POST | Ajouter un dicton |
 | `?route=dictons/toggle` | POST | Activer/désactiver un dicton (`{id}`) |
-| `?route=dictons/bulk` | POST | Import en masse (seed initial) |
+| `?route=dictons/bulk` | POST | Import en masse, idempotent (seed) |
+| `?route=dictons/dedupe` | POST | Supprime les doublons de dictons |
+| `?route=fetes/bulk` | POST | Import des fêtes du jour (table `fetes_jour`, créée automatiquement) |
 | `?route=villes/recherche&q=` | GET | Recherche de commune |
 | `?route=extremes/france` | GET | Températures extrêmes du jour |
 | `?route=extremes/france` | POST | Enregistrer des mesures (`{mesures: [...]}`) |
@@ -129,7 +158,7 @@ Fichier : `wordpress-plugin/temperatures-extremes-france.php`. À installer sur 
 define( 'TEF_API_URL', 'https://dicton-du-jour.alertes-meteo.com/api/v1/extremes/france' );
 ```
 
-Puis utiliser `[temperatures_extremes_france]` dans une page ou un article.
+Puis utiliser `[temperatures_extremes_france limite="3"]` dans une page ou un article (`limite` = nombre de stations affichées pour les maxima **et** pour les minima, 3 par défaut). Installation : compresser le fichier `.php` en `.zip` puis Extensions → Ajouter → Téléverser. Les données sont mises en cache 15 minutes par le plugin.
 
 ## Sources du contenu éditorial
 
@@ -154,6 +183,10 @@ node prisma/parser-meteoeu.mjs
 
 Chaque dicton conserve l'URL de la page mensuelle source.
 
+**Fêtes du jour** : `prisma/seed-data-fetes.json` (366 jours) généré depuis les pages jour de Nominis, importé par `npm run seed:fetes`.
+
+**Autres sources** : événements historiques — Wikipédia (CC BY-SA 4.0) ; vacances scolaires — data.education.gouv.fr (Licence Ouverte) ; astronomie et fêtes populaires — calculs internes (Meeus), aucune donnée externe.
+
 ## Sécurité de l'admin
 
 Pas d'authentification (choix assumé pour ce mini-site) : la protection repose uniquement sur l'obscurité de l'URL. Avant déploiement :
@@ -172,6 +205,18 @@ Deux workflows GitHub Actions :
 
 **Secrets attendus** (Settings → Secrets and variables → Actions du dépôt) : `OVH_API_URL`, `OVH_API_TOKEN`, `METEOFRANCE_API_KEY`. `alertesmeteo-hub` étant un compte personnel GitHub (pas une organisation), ces secrets sont définis **par dépôt** — pas de partage automatique entre projets ; à redéfinir dans chaque dépôt qui en a besoin lors d'une rotation.
 
-## Déploiement du site Next.js (proposition)
+## Déploiement (VPS Ubuntu)
 
-Puisque la base n'impose plus d'être physiquement chez OVH (grâce à `ovh-api/`), le site peut être hébergé n'importe où : VPS (OVH ou ailleurs), ou une plateforme gratuite compatible Next.js. Prévoir un process manager (ex: PM2) derrière un reverse-proxy (nginx) avec TLS si VPS ; déploiement automatisé via GitHub Actions à ajouter dans une prochaine passe.
+Le site tourne sur un VPS OVH : Node.js + **PM2** (processus `dicton-du-jour`, port 3000) derrière **nginx** avec TLS (certbot / Let's Encrypt) sur `dicton-du-jour.alertes-meteo.com`. Le fuseau du VPS est UTC : toutes les dates affichées utilisent explicitement `Europe/Paris`.
+
+Mise à jour après un `git push` (dans le dossier du projet sur le VPS) :
+
+```bash
+git pull
+npm run build
+pm2 restart dicton-du-jour
+```
+
+Le fichier `.env` n'est pas dans Git et doit exister sur le VPS : `OVH_API_URL`, `OVH_API_TOKEN`, `ADMIN_SLUG`, `NEXT_PUBLIC_SITE_URL`, `METEOFRANCE_API_KEY`. Si `ovh-api/index.php` change, le renvoyer aussi sur l'hébergement OVH (FTP).
+
+La version affichée dans le pied de page vient de `package.json` (`version`) ; la date est celle du dernier `npm run build`.
