@@ -26,6 +26,13 @@ const MOIS_LONGS = [
   'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
 ];
 
+function formaterInstantParis(iso: string): string {
+  const d = new Date(iso);
+  const jour = d.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const heure = d.toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' });
+  return `${jour} à ${heure}`;
+}
+
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const p = await params;
   const date = parserDate(p);
@@ -98,6 +105,21 @@ export default async function PageJour({ params }: { params: Promise<Params> }) 
       </section>
 
       <MeteoSoleil date={contenu.date} />
+
+      <section aria-labelledby="cycle-lunaire">
+        <h2 id="cycle-lunaire">Cycle lunaire du jour</h2>
+        <p>
+          En ce {date.getDate()} {MOIS_LONGS[date.getMonth()]}, la Lune est en phase : <strong>{contenu.cycleLunaire.phase}</strong>.
+        </p>
+        <p>
+          Prochaine phase lunaire : {contenu.cycleLunaire.prochaine.libelle}, prévue le{' '}
+          {formaterInstantParis(contenu.cycleLunaire.prochaine.instant)}.
+        </p>
+        <ul>
+          <li>Prochaine pleine lune : {formaterInstantParis(contenu.cycleLunaire.prochainePleineLune)}</li>
+          <li>Prochaine nouvelle lune : {formaterInstantParis(contenu.cycleLunaire.prochaineNouvelleLune)}</li>
+        </ul>
+      </section>
 
       <section aria-labelledby="infos-complementaires">
         <h2 id="infos-complementaires">Informations complémentaires</h2>
