@@ -126,6 +126,145 @@ html {
   vertical-align: middle;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.calendrier {
+  max-width: 980px;
+}
+
+.grille-calendrier {
+  table-layout: fixed;
+  margin: 0;
+}
+
+.grille-calendrier th,
+.grille-calendrier td {
+  border: 1px solid var(--couleur-bordure);
+  padding: 0;
+  text-align: center;
+  vertical-align: top;
+}
+
+.grille-calendrier thead th {
+  padding: 6px 2px;
+  font-size: 0.85rem;
+}
+
+.grille-calendrier .numero-semaine {
+  width: 44px;
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 400;
+  vertical-align: middle;
+}
+
+.grille-calendrier td.weekend {
+  background: rgba(100, 116, 139, 0.08);
+}
+
+.grille-calendrier td.ferie {
+  background: rgba(220, 38, 38, 0.12);
+}
+
+.case-jour {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: 74px;
+  padding: 4px 2px;
+  color: var(--couleur-texte);
+  text-decoration: none;
+}
+
+.numero-jour {
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.icones-jour {
+  margin-left: 2px;
+  font-size: 0.8rem;
+}
+
+.saint-jour {
+  font-size: 0.68rem;
+  line-height: 1.15;
+  color: #64748b;
+  overflow-wrap: anywhere;
+}
+
+.ferie-jour {
+  font-size: 0.65rem;
+  line-height: 1.1;
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.actions-calendrier {
+  margin-top: 12px;
+}
+
+.bouton-imprimer {
+  padding: 10px 16px;
+  border: 1px solid var(--couleur-accent);
+  border-radius: 8px;
+  background: var(--couleur-accent);
+  color: #fff;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .saint-jour {
+    display: none;
+  }
+  .case-jour {
+    min-height: 48px;
+  }
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+  .menu-site,
+  .partage,
+  .actions-calendrier,
+  .navigation-jour-fil,
+  section[aria-labelledby='partager'],
+  #imprimer {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+    color: #000;
+  }
+  .page-jour {
+    max-width: none;
+    padding: 0;
+  }
+  .page-jour section {
+    border: none;
+    padding: 0;
+    break-inside: avoid;
+  }
+  .saint-jour {
+    display: block;
+  }
+  .case-jour {
+    min-height: 60px;
+  }
+}
+
 .navigation-jour a {
   color: var(--couleur-accent);
   text-decoration: none;

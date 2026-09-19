@@ -30,6 +30,9 @@ export default function MenuSite() {
             </li>
           ))}
           <li>
+            <a href="/calendrier">Calendrier</a>
+          </li>
+          <li>
             <a href="/jours-feries">Jours fériés</a>
           </li>
         </ul>

@@ -6,7 +6,7 @@ const C = [1934.136, 32964.467, 20.186, 445267.112, 45036.886, 22518.443, 65928.
 const RAD = Math.PI / 180;
 
 /** Équinoxes et solstices (Meeus, « Astronomical Algorithms », ch. 27). Précision de quelques minutes. */
-function instantSaison(annee: number, indice: 0 | 1 | 2 | 3): Date {
+export function instantSaison(annee: number, indice: 0 | 1 | 2 | 3): Date {
   const Y = (annee - 2000) / 1000;
   const jde0 = [
     2451623.80984 + 365242.37404 * Y + 0.05169 * Y ** 2 - 0.00411 * Y ** 3 - 0.00057 * Y ** 4,
