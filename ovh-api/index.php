@@ -168,16 +168,27 @@ switch ("$methode:$route") {
 	case 'POST:dictons/bulk':
 		$d = corpsJson();
 		$liste = $d['dictons'] ?? [];
+		$existe = $db->prepare('SELECT id FROM dictons WHERE texte = ? AND mois <=> ? AND jour <=> ? LIMIT 1');
 		$stmt = $db->prepare('INSERT INTO dictons (texte, type, mois, jour, source) VALUES (?, ?, ?, ?, ?)');
 		$compte = 0;
 		foreach ($liste as $item) {
 			$mois = isset($item['mois']) ? (int)$item['mois'] : null;
 			$jour = isset($item['jour']) ? (int)$item['jour'] : null;
+			$existe->bind_param('sii', $item['texte'], $mois, $jour);
+			$existe->execute();
+			if ($existe->get_result()->num_rows > 0) continue; // déjà présent : import rejouable sans doublon
 			$stmt->bind_param('ssiis', $item['texte'], $item['type'], $mois, $jour, $item['source']);
 			$stmt->execute();
 			$compte++;
 		}
 		repondre(['ok' => true, 'compte' => $compte]);
+
+	case 'POST:dictons/dedupe':
+		$db->query(
+			'DELETE d1 FROM dictons d1 INNER JOIN dictons d2
+			 ON d1.texte = d2.texte AND d1.mois <=> d2.mois AND d1.jour <=> d2.jour AND d1.id > d2.id'
+		);
+		repondre(['ok' => true, 'supprimes' => $db->affected_rows]);
 
 	case 'POST:villes/bulk':
 		$d = corpsJson();

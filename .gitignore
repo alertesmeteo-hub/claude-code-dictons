@@ -37,6 +37,9 @@ yarn-error.log*
 # secrets PHP API OVH
 ovh-api/config.php
 
+# config locale outil (navigateur de dev), pas partie du projet
+.claude/launch.json
+
 # vercel
 .vercel
 
