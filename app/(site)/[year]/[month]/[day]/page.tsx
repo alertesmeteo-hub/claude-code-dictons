@@ -155,7 +155,7 @@ export default async function PageJour({ params }: { params: Promise<Params> }) 
         <ul>
           {contenu.dictons.map((d, i) => (
             <li key={i}>
-              {d.texte} <span className="type-dicton">({d.type.replace('_', ' ')})</span>
+              «&nbsp;{d.texte}&nbsp;» <span className="type-dicton">({d.type.replace('_', ' ')})</span>
             </li>
           ))}
         </ul>
