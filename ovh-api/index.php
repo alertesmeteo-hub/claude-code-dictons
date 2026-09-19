@@ -65,6 +65,21 @@ function corpsJson() {
 	return is_array($donnees) ? $donnees : [];
 }
 
+// Table créée automatiquement au premier usage (pas de manipulation phpMyAdmin nécessaire).
+function assurerTableFetes($db) {
+	$db->query(
+		'CREATE TABLE IF NOT EXISTS fetes_jour (
+			mois TINYINT NOT NULL,
+			jour TINYINT NOT NULL,
+			prenoms MEDIUMTEXT NULL,
+			autres_fetes MEDIUMTEXT NULL,
+			source VARCHAR(255) NULL,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+			PRIMARY KEY (mois, jour)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+	);
+}
+
 $route = $_GET['route'] ?? '';
 $methode = $_SERVER['REQUEST_METHOD'];
 $db = getDb();
@@ -92,7 +107,36 @@ switch ("$methode:$route") {
 			$dictons = $res->fetch_all(MYSQLI_ASSOC);
 		}
 
-		repondre(['saint' => $saint ?: null, 'dictons' => $dictons]);
+		assurerTableFetes($db);
+		$stmt = $db->prepare('SELECT prenoms, autres_fetes FROM fetes_jour WHERE mois = ? AND jour = ? LIMIT 1');
+		$stmt->bind_param('ii', $mois, $jour);
+		$stmt->execute();
+		$fete = $stmt->get_result()->fetch_assoc();
+		if ($fete) {
+			$fete = [
+				'prenoms' => json_decode($fete['prenoms'] ?? '[]', true) ?: [],
+				'autresFetes' => json_decode($fete['autres_fetes'] ?? '[]', true) ?: [],
+			];
+		}
+
+		repondre(['saint' => $saint ?: null, 'dictons' => $dictons, 'fete' => $fete ?: null]);
+
+	case 'POST:fetes/bulk':
+		assurerTableFetes($db);
+		$d = corpsJson();
+		$stmt = $db->prepare(
+			'INSERT INTO fetes_jour (mois, jour, prenoms, autres_fetes, source) VALUES (?, ?, ?, ?, ?)
+			 ON DUPLICATE KEY UPDATE prenoms=VALUES(prenoms), autres_fetes=VALUES(autres_fetes), source=VALUES(source)'
+		);
+		$compte = 0;
+		foreach (($d['fetes'] ?? []) as $f) {
+			$prenoms = json_encode($f['prenoms'] ?? [], JSON_UNESCAPED_UNICODE);
+			$autres = json_encode($f['autresFetes'] ?? [], JSON_UNESCAPED_UNICODE);
+			$stmt->bind_param('iisss', $f['mois'], $f['jour'], $prenoms, $autres, $f['source']);
+			$stmt->execute();
+			$compte++;
+		}
+		repondre(['ok' => true, 'compte' => $compte]);
 
 	// ---- Saints (admin) ----
 	case 'GET:saints':

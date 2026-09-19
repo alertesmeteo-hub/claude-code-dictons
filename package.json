@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "tsx prisma/seed.ts",
+    "seed:fetes": "tsx prisma/seed-fetes.ts",
     "cron:generation-jour": "tsx scripts/cron-generation-jour.ts",
     "cron:extremes-meteo": "tsx scripts/cron-extremes-meteo.ts",
     "test": "vitest run"

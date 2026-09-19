@@ -88,12 +88,48 @@ export default async function PageJour({ params }: { params: Promise<Params> }) 
         <section aria-labelledby="saint-du-jour">
           <h2 id="saint-du-jour">Saint du jour : {contenu.saint.nomPrincipal}</h2>
           {contenu.saint.presentationHistorique && <p>{contenu.saint.presentationHistorique}</p>}
-          {contenu.saint.autresPrenoms && (
-            <p id="fete-du-jour">
-              <strong>Également en fête :</strong> {contenu.saint.autresPrenoms}
+          {contenu.saint.traditions && <p>{contenu.saint.traditions}</p>}
+        </section>
+      )}
+
+      {(contenu.fete || contenu.saint?.autresPrenoms) && (
+        <section aria-labelledby="fete-du-jour" id="fete-du-jour">
+          <h2 id="titre-fete-du-jour">
+            Fête du jour : {date.getDate()} {MOIS_LONGS[date.getMonth()]}
+          </h2>
+          {contenu.fete && contenu.fete.prenoms.length > 0 ? (
+            <p>
+              <strong>Également en fête le {date.getDate()} {MOIS_LONGS[date.getMonth()]} :</strong>{' '}
+              {contenu.fete.prenoms.join(', ')}.
+            </p>
+          ) : (
+            contenu.saint?.autresPrenoms && (
+              <p>
+                <strong>Également en fête :</strong> {contenu.saint.autresPrenoms}
+              </p>
+            )
+          )}
+          {contenu.fete && contenu.fete.autresFetes.length > 0 && (
+            <>
+              <h3>Autres fêtes du jour</h3>
+              <ul>
+                {contenu.fete.autresFetes.slice(0, 8).map((f) => (
+                  <li key={f.url}>
+                    <a href={f.url} rel="noopener">{f.nom}</a>
+                    {f.description ? ` — ${f.description}` : ''}
+                  </li>
+                ))}
+              </ul>
+              {contenu.fete.autresFetes.length > 8 && (
+                <p className="meta-jour">et {contenu.fete.autresFetes.length - 8} autres saints ou bienheureux du jour.</p>
+              )}
+            </>
+          )}
+          {contenu.fete && (
+            <p className="meta-jour">
+              Source : <a href="https://nominis.cef.fr" rel="noopener">Nominis</a>, Conférence des évêques de France.
             </p>
           )}
-          {contenu.saint.traditions && <p>{contenu.saint.traditions}</p>}
         </section>
       )}
 

@@ -80,9 +80,19 @@ export interface ExtremeApi {
   altitude_m: number;
 }
 
+export interface FeteJourApi {
+  prenoms: string[];
+  autresFetes: { nom: string; description: string | null; url: string }[];
+}
+
 export const ovhApi = {
   jourContenu: (date: string) =>
-    appelerApi<{ saint: SaintApi | null; dictons: { texte: string; type: string }[] }>(`jour&date=${date}`),
+    appelerApi<{ saint: SaintApi | null; dictons: { texte: string; type: string }[]; fete: FeteJourApi | null }>(
+      `jour&date=${date}`
+    ),
+
+  fetesImportMasse: (fetes: Record<string, unknown>[]) =>
+    appelerApi<{ ok: true; compte: number }>('fetes/bulk', { method: 'POST', body: JSON.stringify({ fetes }) }),
 
   saintsListe: () => appelerApi<SaintApi[]>('saints'),
 

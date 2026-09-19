@@ -1,4 +1,4 @@
-import { ovhApi } from '@/lib/db/ovh-api-client';
+import { ovhApi, type FeteJourApi } from '@/lib/db/ovh-api-client';
 import { calculerInfosJourAnnee } from '@/lib/calculs/jour-annee';
 import { signeZodiaque, signeAstrologieChinoise } from '@/lib/calculs/zodiaque';
 import { convertirEnCalendrierRepublicain } from '@/lib/calculs/calendrier-republicain';
@@ -21,6 +21,7 @@ export interface ContenuJour {
     traditions: string | null;
   } | null;
   dictons: { texte: string; type: string }[];
+  fete: FeteJourApi | null;
 }
 
 /**
@@ -30,7 +31,7 @@ export interface ContenuJour {
  */
 export async function construireContenuJour(date: Date): Promise<ContenuJour> {
   const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-  const { saint, dictons } = await ovhApi.jourContenu(dateStr);
+  const { saint, dictons, fete } = await ovhApi.jourContenu(dateStr);
 
   return {
     date: dateStr,
@@ -50,5 +51,6 @@ export async function construireContenuJour(date: Date): Promise<ContenuJour> {
         }
       : null,
     dictons,
+    fete,
   };
 }
