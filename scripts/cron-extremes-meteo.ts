@@ -42,10 +42,28 @@ interface MesureExtreme {
  * L'ancien flux OAuth « /token » était rejeté par le pare-feu de Météo-France (page HTML « Request Rejected »).
  * → Sur le portail, créer une application, s'abonner à DPObs, puis générer une « clé API » (et non un jeton OAuth2).
  */
-function enTetes(): Record<string, string> {
+type ModeAuth = 'apikey' | 'bearer';
+let modeAuth: ModeAuth = 'apikey';
+
+function enTetes(mode: ModeAuth = modeAuth): Record<string, string> {
   const cle = process.env.METEOFRANCE_API_KEY;
   if (!cle) throw new Error('METEOFRANCE_API_KEY manquante');
-  return { apikey: cle, Accept: 'application/json' };
+  return mode === 'apikey' ? { apikey: cle, Accept: 'application/json' } : { Authorization: `Bearer ${cle}`, Accept: 'application/json' };
+}
+
+/** GET authentifié : essaie l'en-tête `apikey`, puis `Authorization: Bearer` si la passerelle répond 401. */
+async function get(url: string): Promise<Response> {
+  let reponse = await fetch(url, { headers: enTetes() });
+  if (reponse.status === 401) {
+    const autre: ModeAuth = modeAuth === 'apikey' ? 'bearer' : 'apikey';
+    const essai = await fetch(url, { headers: enTetes(autre) });
+    if (essai.status !== 401) {
+      modeAuth = autre;
+      console.log(`Authentification acceptée en mode « ${autre} »`);
+      reponse = essai;
+    }
+  }
+  return reponse;
 }
 
 async function lireJson(reponse: Response, contexte: string): Promise<unknown> {
@@ -59,9 +77,7 @@ async function lireJson(reponse: Response, contexte: string): Promise<unknown> {
 }
 
 async function listerStationsSynop(): Promise<StationSynop[]> {
-  const reponse = await fetch(`${BASE_URL}/liste-stations-synop?format=json`, {
-    headers: enTetes(),
-  });
+  const reponse = await get(`${BASE_URL}/liste-stations-synop?format=json`);
   const donnees = await lireJson(reponse, 'liste-stations-synop');
 
   return (donnees as any[]).map((s) => ({
@@ -73,10 +89,7 @@ async function listerStationsSynop(): Promise<StationSynop[]> {
 }
 
 async function recupererExtremesStation(station: StationSynop, dateJour: string): Promise<MesureExtreme[]> {
-  const reponse = await fetch(
-    `${BASE_URL}/station/horaire?id_station=${station.id}&date=${dateJour}T00:00:00Z&format=json`,
-    { headers: enTetes() }
-  );
+  const reponse = await get(`${BASE_URL}/station/horaire?id_station=${station.id}&date=${dateJour}T00:00:00Z&format=json`);
   const observations = await lireJson(reponse, `station/horaire ${station.id}`);
 
   const temperatures: { valeurC: number; heure: string }[] = (observations as any[])
