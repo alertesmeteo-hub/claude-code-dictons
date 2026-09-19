@@ -106,6 +106,17 @@ export default async function PageJour({ params }: { params: Promise<Params> }) 
           {contenu.astrologieChinoise}
         </p>
         <p>Calendrier républicain : {contenu.calendrierRepublicain.libelle}</p>
+        <p>
+          Prochain jour férié en France : <strong>{contenu.prochainJourFerie.nom}</strong> le{' '}
+          {new Date(`${contenu.prochainJourFerie.date}T12:00:00`).toLocaleDateString('fr-FR', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+          })}{' '}
+          {contenu.prochainJourFerie.joursRestants === 0
+            ? "(aujourd'hui)"
+            : `(dans ${contenu.prochainJourFerie.joursRestants} jour${contenu.prochainJourFerie.joursRestants > 1 ? 's' : ''})`}
+        </p>
       </section>
     </main>
   );

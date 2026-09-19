@@ -2,6 +2,7 @@ import { ovhApi } from '@/lib/db/ovh-api-client';
 import { calculerInfosJourAnnee } from '@/lib/calculs/jour-annee';
 import { signeZodiaque, signeAstrologieChinoise } from '@/lib/calculs/zodiaque';
 import { convertirEnCalendrierRepublicain } from '@/lib/calculs/calendrier-republicain';
+import { prochainJourFerie } from '@/lib/calculs/jours-feries';
 
 export interface ContenuJour {
   date: string; // YYYY-MM-DD
@@ -9,6 +10,7 @@ export interface ContenuJour {
   zodiaque: ReturnType<typeof signeZodiaque>;
   astrologieChinoise: string;
   calendrierRepublicain: ReturnType<typeof convertirEnCalendrierRepublicain>;
+  prochainJourFerie: ReturnType<typeof prochainJourFerie>;
   saint: {
     nomPrincipal: string;
     presentationHistorique: string | null;
@@ -34,6 +36,7 @@ export async function construireContenuJour(date: Date): Promise<ContenuJour> {
     zodiaque: signeZodiaque(date),
     astrologieChinoise: signeAstrologieChinoise(date),
     calendrierRepublicain: convertirEnCalendrierRepublicain(date),
+    prochainJourFerie: prochainJourFerie(date),
     saint: saint
       ? {
           nomPrincipal: saint.nom_principal,
