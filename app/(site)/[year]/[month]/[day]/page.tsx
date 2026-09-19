@@ -80,7 +80,7 @@ export default async function PageJour({ params }: { params: Promise<Params> }) 
         </h1>
         <p className="meta-jour">
           Jour {contenu.infosJourAnnee.numeroJourAnnee}/{contenu.infosJourAnnee.bissextile ? 366 : 365} ·{' '}
-          {contenu.infosJourAnnee.joursRestants} jours restants · Semaine ISO {contenu.infosJourAnnee.semaineISO}
+          {contenu.infosJourAnnee.joursRestants} jours restants · Semaine {contenu.infosJourAnnee.semaineISO}
         </p>
       </header>
 
