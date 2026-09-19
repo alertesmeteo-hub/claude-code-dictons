@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { suivre } from '@/lib/suivi';
 
 export default function Partage({ titre }: { titre: string }) {
   const [url, setUrl] = useState('');
@@ -16,6 +17,7 @@ export default function Partage({ titre }: { titre: string }) {
   const t = encodeURIComponent(titre);
 
   async function copier() {
+    suivre('Partage', { reseau: 'lien copié' });
     try {
       await navigator.clipboard.writeText(url);
       setCopie(true);
@@ -28,15 +30,18 @@ export default function Partage({ titre }: { titre: string }) {
       <h2 id="partager">Partager cette page</h2>
       <div className="partage">
         {natif && (
-          <button type="button" onClick={() => navigator.share({ title: titre, url }).catch(() => {})}>
+          <button type="button" onClick={() => {
+              suivre('Partage', { reseau: 'natif' });
+              navigator.share({ title: titre, url }).catch(() => {});
+            }}>
             Partager…
           </button>
         )}
-        <a href={`https://www.facebook.com/sharer/sharer.php?u=${u}`} target="_blank" rel="noopener noreferrer">Facebook</a>
-        <a href={`https://twitter.com/intent/tweet?url=${u}&text=${t}`} target="_blank" rel="noopener noreferrer">X</a>
-        <a href={`https://wa.me/?text=${t}%20${u}`} target="_blank" rel="noopener noreferrer">WhatsApp</a>
-        <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${u}`} target="_blank" rel="noopener noreferrer">LinkedIn</a>
-        <a href={`mailto:?subject=${t}&body=${u}`}>E-mail</a>
+        <a href={`https://www.facebook.com/sharer/sharer.php?u=${u}`} target="_blank" rel="noopener noreferrer" onClick={() => suivre('Partage', { reseau: 'Facebook' })}>Facebook</a>
+        <a href={`https://twitter.com/intent/tweet?url=${u}&text=${t}`} target="_blank" rel="noopener noreferrer" onClick={() => suivre('Partage', { reseau: 'X' })}>X</a>
+        <a href={`https://wa.me/?text=${t}%20${u}`} target="_blank" rel="noopener noreferrer" onClick={() => suivre('Partage', { reseau: 'WhatsApp' })}>WhatsApp</a>
+        <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${u}`} target="_blank" rel="noopener noreferrer" onClick={() => suivre('Partage', { reseau: 'LinkedIn' })}>LinkedIn</a>
+        <a href={`mailto:?subject=${t}&body=${u}`} onClick={() => suivre('Partage', { reseau: 'E-mail' })}>E-mail</a>
         <button type="button" onClick={copier}>{copie ? 'Lien copié ✓' : 'Copier le lien'}</button>
       </div>
     </section>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { suivre } from '@/lib/suivi';
 
 interface Previsions {
   temperatureActuelle: number;
@@ -150,10 +151,10 @@ export default function MeteoSoleil({ date, saisons }: { date: string; saisons: 
       )}
 
       <p>
-        <a href="https://alertes-meteo.com/modeles/multi-modeles/" rel="noopener">Texte météo jusqu&apos;à 15 jours</a>
+        <a href="https://alertes-meteo.com/modeles/multi-modeles/" rel="noopener" onClick={() => suivre('Lien météo 15 jours')}>Texte météo jusqu&apos;à 15 jours</a>
       </p>
       <p>
-        <a href="https://alertes-meteo.systeme.io/meteodujour" rel="noopener">
+        <a href="https://alertes-meteo.systeme.io/meteodujour" rel="noopener" onClick={() => suivre('Lien newsletter météo')}>
           Recevez chaque matin l&apos;essentiel de la météo par email.
         </a>
       </p>

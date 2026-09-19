@@ -1,6 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
+import { suivre } from '@/lib/suivi';
 
 const ENTREES = [
   { libelle: 'Fête du jour', ancre: 'fete-du-jour' },
@@ -26,17 +27,17 @@ export default function MenuSite() {
         <ul>
           {ENTREES.map((e) => (
             <li key={e.ancre}>
-              <a href={surPageDuJour ? `#${e.ancre}` : `/#${e.ancre}`}>{e.libelle}</a>
+              <a href={surPageDuJour ? `#${e.ancre}` : `/#${e.ancre}`} onClick={() => suivre('Menu', { entrée: e.libelle })}>{e.libelle}</a>
             </li>
           ))}
           <li>
-            <a href="/calendrier">Calendrier</a>
+            <a href="/calendrier" onClick={() => suivre('Menu', { entrée: 'Calendrier' })}>Calendrier</a>
           </li>
           <li>
-            <a href="/vacances-scolaires">Vacances scolaires</a>
+            <a href="/vacances-scolaires" onClick={() => suivre('Menu', { entrée: 'Vacances scolaires' })}>Vacances scolaires</a>
           </li>
           <li>
-            <a href="/jours-feries">Jours fériés</a>
+            <a href="/jours-feries" onClick={() => suivre('Menu', { entrée: 'Jours fériés' })}>Jours fériés</a>
           </li>
         </ul>
       </nav>
