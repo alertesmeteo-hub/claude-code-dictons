@@ -25,7 +25,7 @@ export interface ContenuJour {
  * Ne fait AUCUN appel météo (géré séparément côté client via /api/v1/meteo).
  */
 export async function construireContenuJour(date: Date): Promise<ContenuJour> {
-  const dateStr = date.toISOString().slice(0, 10);
+  const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   const { saint, dictons } = await ovhApi.jourContenu(dateStr);
 
   return {

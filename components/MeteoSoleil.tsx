@@ -124,8 +124,8 @@ export default function MeteoSoleil({ date }: { date: string }) {
         <div>
           <h3>Prévisions météo pour {ville}</h3>
           <p>
-            {previsions.temperatureActuelle} °C actuellement · min {previsions.temperatureMin} °C / max{' '}
-            {previsions.temperatureMax} °C · vent {previsions.vitesseVent} km/h
+            {Math.round(previsions.temperatureActuelle)} °C actuellement · min {Math.round(previsions.temperatureMin)} °C
+            / max {Math.round(previsions.temperatureMax)} °C · vent {Math.round(previsions.vitesseVent / 5) * 5} km/h
           </p>
 
           <h3>Lever et coucher du soleil</h3>

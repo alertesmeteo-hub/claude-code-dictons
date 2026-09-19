@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { ovhApi } from '@/lib/db/ovh-api-client';
+import { dateAujourdhuiParis } from '@/lib/calculs/date-paris';
 import { revalidatePath } from 'next/cache';
 import Link from 'next/link';
 
@@ -19,8 +20,7 @@ export default async function TableauDeBordAdmin() {
     ovhApi.extremesFrance().catch(() => ({ date: '', donnees: [] })),
   ]);
 
-  const aujourdHui = new Date();
-  const dateAujourdHui = aujourdHui.toISOString().slice(0, 10);
+  const dateAujourdHui = dateAujourdhuiParis();
   const [y, m, d] = dateAujourdHui.split('-');
 
   const dernierEchecMeteo = derniersLogs.find((l) => l.tache === 'meteo_extremes' && l.statut === 'erreur');

@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { ovhApi } from '../lib/db/ovh-api-client';
+import { dateAujourdhuiParis } from '../lib/calculs/date-paris';
 
 /**
  * À exécuter chaque nuit à 00:05 (cron système / task scheduler).
@@ -7,7 +8,7 @@ import { ovhApi } from '../lib/db/ovh-api-client';
  * par lib/calculs/page-jour.ts à chaque requête via l'API OVH.
  */
 async function main() {
-  const dateAujourdHui = new Date().toISOString().slice(0, 10);
+  const dateAujourdHui = dateAujourdhuiParis();
 
   try {
     await ovhApi.pageJourGenerer(dateAujourdHui);
