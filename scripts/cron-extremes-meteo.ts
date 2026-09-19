@@ -2,132 +2,149 @@ import 'dotenv/config';
 import { ovhApi } from '../lib/db/ovh-api-client';
 
 /**
- * ⚠️ SQUELETTE NON FINALISÉ — voir README.md section "Températures extrêmes".
+ * Températures extrêmes du jour en France (stations d'altitude < 500 m).
  *
- * Source réelle vérifiée : API Météo-France DPObs v1 (https://public-api.meteofrance.fr/public/DPObs/v1),
- * gratuite sur inscription à https://portail-api.meteofrance.fr/. Endpoints /liste-stations-synop
- * et /station/horaire confirmés existants. Deux points restent à vérifier avec un compte réel
- * (non vérifiables sans authentification) : l'obtention d'une clé API valide (en-tête apikey), et le nom/unité
- * exact du champ température dans la réponse /station/horaire.
- *
- * Écrit désormais via l'API OVH (ovhApi.extremesEnregistrer) au lieu de Prisma direct,
- * puisque la base n'est joignable que depuis le réseau OVH.
+ * Sources (Météo-France, portail https://portail-api.meteofrance.fr, clé API dans METEOFRANCE_API_KEY) :
+ *  - DPObs v1 /liste-stations : CSV des stations (identifiant, nom, latitude, longitude, altitude) ;
+ *  - DPPaquetObs v1 /paquet/horaire?id-departement=XX : observations horaires des dernières 24 h de toutes
+ *    les stations d'un département. Champs utilisés : geo_id_insee (identifiant station), validity_time,
+ *    t / tx / tn (température, maximum et minimum de l'heure, en kelvins).
+ * Une exécution = ~100 appels (un par département), espacés pour respecter la limite de requêtes.
+ * Écrit via l'API OVH (ovhApi.extremesEnregistrer) : la base n'est joignable que depuis le réseau OVH.
  */
 
-const BASE_URL = 'https://public-api.meteofrance.fr/public/DPObs/v1';
+const DPOBS = 'https://public-api.meteofrance.fr/public/DPObs/v1';
+const DPPAQUET = 'https://public-api.meteofrance.fr/public/DPPaquetObs/v1';
 const ALTITUDE_MAX_M = 500;
+const NB_PAR_TYPE = 15; // nombre de stations conservées pour les maxima et pour les minima
+const PAUSE_ENTRE_APPELS_MS = 1500;
 const MAX_TENTATIVES = 3;
 
-interface StationSynop {
+interface Station {
   id: string;
   nom: string;
   departement: string;
   altitude: number;
 }
 
-interface MesureExtreme {
+interface Mesure {
   codeStation: string;
   nomCommune: string;
   departement: string;
   altitudeM: number;
   type: 'maxi' | 'mini';
   valeurC: number;
-  heureMesure: string;
+  heureMesure: string; // HH:MM:SS, heure de Paris
   source: string;
 }
 
-/**
- * Authentification : la passerelle (WSO2) accepte une clé d'API générée sur le portail dans l'en-tête `apikey`
- * (vérifié : elle liste `apikey` parmi les en-têtes autorisés et répond 401 JSON sans clé valide).
- * L'ancien flux OAuth « /token » était rejeté par le pare-feu de Météo-France (page HTML « Request Rejected »).
- * → Sur le portail, créer une application, s'abonner à DPObs, puis générer une « clé API » (et non un jeton OAuth2).
- */
-type ModeAuth = 'apikey' | 'bearer';
-let modeAuth: ModeAuth = 'apikey';
-
-function enTetes(mode: ModeAuth = modeAuth): Record<string, string> {
-  const cle = process.env.METEOFRANCE_API_KEY;
-  if (!cle) throw new Error('METEOFRANCE_API_KEY manquante');
-  return mode === 'apikey' ? { apikey: cle, Accept: 'application/json' } : { Authorization: `Bearer ${cle}`, Accept: 'application/json' };
+interface Observation {
+  geo_id_insee: string;
+  validity_time: string;
+  t: number | null;
+  tx: number | null;
+  tn: number | null;
 }
 
-/** GET authentifié : essaie l'en-tête `apikey`, puis `Authorization: Bearer` si la passerelle répond 401. */
-async function get(url: string): Promise<Response> {
-  let reponse = await fetch(url, { headers: enTetes() });
-  if (reponse.status === 401) {
-    const autre: ModeAuth = modeAuth === 'apikey' ? 'bearer' : 'apikey';
-    const essai = await fetch(url, { headers: enTetes(autre) });
-    if (essai.status !== 401) {
-      modeAuth = autre;
-      console.log(`Authentification acceptée en mode « ${autre} »`);
-      reponse = essai;
-    }
+const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const kelvinEnC = (k: number) => Math.round((k - 273.15) * 10) / 10;
+
+function cle(): string {
+  const c = process.env.METEOFRANCE_API_KEY;
+  if (!c) throw new Error('METEOFRANCE_API_KEY manquante');
+  return c;
+}
+
+/** GET avec l'en-tête apikey ; 3 essais sur erreur temporaire (429 / 5xx). */
+async function get(url: string): Promise<string> {
+  let dernier = '';
+  for (let essai = 1; essai <= 3; essai++) {
+    const r = await fetch(url, { headers: { apikey: cle() } });
+    const texte = await r.text();
+    if (r.ok) return texte;
+    dernier = `HTTP ${r.status} ${texte.slice(0, 150)}`;
+    if (r.status !== 429 && r.status < 500) break;
+    await pause(essai * 5000);
   }
-  return reponse;
+  throw new Error(dernier);
 }
 
-async function lireJson(reponse: Response, contexte: string): Promise<unknown> {
-  const texte = await reponse.text();
-  if (!reponse.ok) throw new Error(`${contexte} : HTTP ${reponse.status} ${texte.slice(0, 150)}`);
-  try {
-    return JSON.parse(texte);
-  } catch {
-    throw new Error(`${contexte} : réponse non JSON (${texte.slice(0, 100)})`);
-  }
+async function listerStations(): Promise<Station[]> {
+  const csv = await get(`${DPOBS}/liste-stations`);
+  const [entete, ...lignes] = csv.trim().split(/\r?\n/);
+  const col = entete.split(';');
+  const [iId, iNom, iAlt] = ['Id_station', 'Nom_usuel', 'Altitude'].map((n) => col.indexOf(n));
+  if (iId < 0 || iNom < 0 || iAlt < 0) throw new Error(`Colonnes inattendues : ${entete}`);
+
+  return lignes
+    .map((l) => l.split(';'))
+    .map((c) => ({ id: c[iId], nom: c[iNom], departement: c[iId].slice(0, 2), altitude: Number(c[iAlt]) }))
+    .filter((s) => s.id.length === 8 && Number.isFinite(s.altitude) && s.altitude < ALTITUDE_MAX_M);
 }
 
-async function listerStationsSynop(): Promise<StationSynop[]> {
-  const reponse = await get(`${BASE_URL}/liste-stations-synop?format=json`);
-  const donnees = await lireJson(reponse, 'liste-stations-synop');
+const jourParis = (iso: string) =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
+const heureParis = (iso: string) =>
+  new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+    .format(new Date(iso))
+    .replace(/^24/, '00');
 
-  return (donnees as any[]).map((s) => ({
-    id: String(s.id ?? s.id_station),
-    nom: s.nom ?? s.name,
-    departement: s.departement ?? s.dep ?? '',
-    altitude: Number(s.altitude ?? s.alti ?? 0),
-  }));
-}
+type Extreme = { v: number; iso: string };
 
-async function recupererExtremesStation(station: StationSynop, dateJour: string): Promise<MesureExtreme[]> {
-  const reponse = await get(`${BASE_URL}/station/horaire?id_station=${station.id}&date=${dateJour}T00:00:00Z&format=json`);
-  const observations = await lireJson(reponse, `station/horaire ${station.id}`);
+async function extremesDuJour(): Promise<Mesure[]> {
+  const stations = await listerStations();
+  const parId = new Map(stations.map((s) => [s.id, s]));
+  // Métropole : départements 01-95 ; la Corse (préfixe 20) s'interroge en 2A / 2B.
+  const prefixes = [...new Set(stations.map((s) => s.departement))].filter((p) => /^\d\d$/.test(p) && Number(p) <= 95);
+  const departements = prefixes.flatMap((p) => (p === '20' ? ['2A', '2B'] : [p])).sort();
 
-  const temperatures: { valeurC: number; heure: string }[] = (observations as any[])
-    .filter((o) => o.t != null)
-    .map((o) => ({ valeurC: Number(o.t) - 273.15, heure: o.reference_time ?? o.date }));
+  const aujourdhui = jourParis(new Date().toISOString());
+  const maxi = new Map<string, Extreme>();
+  const mini = new Map<string, Extreme>();
+  let echecs = 0;
 
-  if (temperatures.length === 0) return [];
-
-  const maxi = temperatures.reduce((a, b) => (b.valeurC > a.valeurC ? b : a));
-  const mini = temperatures.reduce((a, b) => (b.valeurC < a.valeurC ? b : a));
-  const base = {
-    codeStation: station.id,
-    nomCommune: station.nom,
-    departement: station.departement,
-    altitudeM: station.altitude,
-    source: 'Météo-France — API DPObs (donnees-publiques)',
-  };
-
-  return [
-    { ...base, type: 'maxi' as const, valeurC: Math.round(maxi.valeurC * 10) / 10, heureMesure: maxi.heure },
-    { ...base, type: 'mini' as const, valeurC: Math.round(mini.valeurC * 10) / 10, heureMesure: mini.heure },
-  ];
-}
-
-async function recupererDonneesStations(): Promise<MesureExtreme[]> {
-  const stations = await listerStationsSynop();
-  const stationsBasseAltitude = stations.filter((s) => s.altitude < ALTITUDE_MAX_M);
-  const dateJour = new Date().toISOString().slice(0, 10);
-  const resultats: MesureExtreme[] = [];
-
-  for (const station of stationsBasseAltitude) {
+  for (const dep of departements) {
     try {
-      resultats.push(...(await recupererExtremesStation(station, dateJour)));
-    } catch (erreur) {
-      console.error(`Station ${station.id} ignorée :`, erreur);
+      const obs = JSON.parse(await get(`${DPPAQUET}/paquet/horaire?id-departement=${dep}&format=json`)) as Observation[];
+      for (const o of obs) {
+        if (!parId.has(o.geo_id_insee) || jourParis(o.validity_time) !== aujourdhui) continue;
+        const haut = o.tx ?? o.t;
+        const bas = o.tn ?? o.t;
+        if (haut != null && (!maxi.has(o.geo_id_insee) || kelvinEnC(haut) > maxi.get(o.geo_id_insee)!.v)) {
+          maxi.set(o.geo_id_insee, { v: kelvinEnC(haut), iso: o.validity_time });
+        }
+        if (bas != null && (!mini.has(o.geo_id_insee) || kelvinEnC(bas) < mini.get(o.geo_id_insee)!.v)) {
+          mini.set(o.geo_id_insee, { v: kelvinEnC(bas), iso: o.validity_time });
+        }
+      }
+    } catch (e) {
+      echecs++;
+      console.error(`Département ${dep} ignoré :`, e instanceof Error ? e.message : e);
     }
+    await pause(PAUSE_ENTRE_APPELS_MS);
   }
-  return resultats;
+
+  if (echecs > departements.length * 0.2) throw new Error(`${echecs}/${departements.length} départements en échec`);
+  if (maxi.size === 0) throw new Error('Aucune observation du jour trouvée');
+
+  const source = 'Météo-France — DPPaquetObs (données publiques)';
+  const versMesure = (id: string, type: 'maxi' | 'mini', e: Extreme): Mesure => {
+    const s = parId.get(id)!;
+    return {
+      codeStation: id,
+      nomCommune: s.nom,
+      departement: s.departement,
+      altitudeM: Math.round(s.altitude),
+      type,
+      valeurC: e.v,
+      heureMesure: heureParis(e.iso),
+      source,
+    };
+  };
+  const hauts = [...maxi].sort((a, b) => b[1].v - a[1].v).slice(0, NB_PAR_TYPE).map(([id, e]) => versMesure(id, 'maxi', e));
+  const bas = [...mini].sort((a, b) => a[1].v - b[1].v).slice(0, NB_PAR_TYPE).map(([id, e]) => versMesure(id, 'mini', e));
+  console.log(`${maxi.size} stations exploitées sur ${departements.length} départements (${echecs} en échec)`);
+  return [...hauts, ...bas];
 }
 
 async function main() {
@@ -135,15 +152,18 @@ async function main() {
 
   for (let tentative = 1; tentative <= MAX_TENTATIVES; tentative++) {
     try {
-      const donnees = await recupererDonneesStations();
+      const donnees = await extremesDuJour();
       const { compte } = await ovhApi.extremesEnregistrer(donnees as unknown as Record<string, unknown>[]);
       await ovhApi.syncLogEnregistrer('meteo_extremes', 'ok', `${compte} mesures synchronisées`);
       console.log(`OK — ${compte} mesures synchronisées`);
+      const chaud = donnees.find((m) => m.type === 'maxi')!;
+      const froid = donnees.find((m) => m.type === 'mini')!;
+      console.log(`Maxi : ${chaud.nomCommune} ${chaud.valeurC} °C — Mini : ${froid.nomCommune} ${froid.valeurC} °C`);
       return;
     } catch (erreur) {
       derniereErreur = erreur;
-      console.error(`Tentative ${tentative}/${MAX_TENTATIVES} échouée`, erreur);
-      if (tentative < MAX_TENTATIVES) await new Promise((r) => setTimeout(r, tentative * 5000));
+      console.error(`Tentative ${tentative}/${MAX_TENTATIVES} échouée`, erreur instanceof Error ? erreur.message : erreur);
+      if (tentative < MAX_TENTATIVES) await pause(tentative * 5000);
     }
   }
 

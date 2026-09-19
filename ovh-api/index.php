@@ -291,7 +291,7 @@ switch ("$methode:$route") {
 			$stmt = $db->prepare(
 				'INSERT INTO temperatures_extremes_jour (date, station_id, type, valeur_c, heure_mesure, source)
 				 VALUES (?, ?, ?, ?, ?, ?)
-				 ON DUPLICATE KEY UPDATE valeur_c=VALUES(valeur_c), source=VALUES(source), fetched_at=CURRENT_TIMESTAMP'
+				 ON DUPLICATE KEY UPDATE valeur_c=VALUES(valeur_c), heure_mesure=VALUES(heure_mesure), source=VALUES(source), fetched_at=CURRENT_TIMESTAMP'
 			);
 			$stmt->bind_param('sisdss', $aujourdHui, $stationId, $m['type'], $m['valeurC'], $m['heureMesure'], $m['source']);
 			$stmt->execute();
