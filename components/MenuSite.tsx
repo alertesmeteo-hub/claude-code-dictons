@@ -33,6 +33,9 @@ export default function MenuSite() {
             <a href="/calendrier">Calendrier</a>
           </li>
           <li>
+            <a href="/vacances-scolaires">Vacances scolaires</a>
+          </li>
+          <li>
             <a href="/jours-feries">Jours fériés</a>
           </li>
         </ul>
