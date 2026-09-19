@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { construireContenuJour } from '@/lib/calculs/page-jour';
 import { evenementsHistoriques } from '@/lib/evenements/wikipedia';
 import MeteoSoleil from '@/components/MeteoSoleil';
+import Partage from '@/components/Partage';
 import NavigationJour from '@/components/NavigationJour';
 
 interface Params {
@@ -144,13 +145,59 @@ export default async function PageJour({ params }: { params: Promise<Params> }) 
         </ul>
       </section>
 
-      <MeteoSoleil date={contenu.date} />
+      <MeteoSoleil
+        date={contenu.date}
+        saisons={{
+          astroActuelle: contenu.saisonAstro.actuelle.nom,
+          astroProchaine: {
+            nom: contenu.saisonAstro.prochaine.nom,
+            libelle: `le ${formaterInstantParis(contenu.saisonAstro.prochaine.debut)}`,
+          },
+          meteoActuelle: contenu.saisonMeteo.actuelle,
+          meteoProchaine: {
+            nom: contenu.saisonMeteo.prochaine.nom,
+            libelle: `le ${new Date(`${contenu.saisonMeteo.prochaine.date}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} (dans ${contenu.saisonMeteo.prochaine.joursRestants} jours)`,
+          },
+        }}
+      />
 
       <section aria-labelledby="cycle-lunaire">
         <h2 id="cycle-lunaire">Cycle lunaire du jour</h2>
         <p>
+          <span className="lune-emoji" aria-hidden="true">{contenu.cycleLunaire.emoji}</span>
           En ce {date.getDate()} {MOIS_LONGS[date.getMonth()]}, la Lune est en phase : <strong>{contenu.cycleLunaire.phase}</strong>.
         </p>
+        {(() => {
+          const jourP = (iso: string) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
+          const ce = `${p.year}-${p.month}-${p.day}`;
+          const duJour = contenu.cycleLunaire.orbite.find((o) => jourP(o.instant) === ce);
+          const km = (n: number) => `${new Intl.NumberFormat('fr-FR').format(Math.round(n / 10) * 10)} km`;
+          const heure = (iso: string) =>
+            new Date(iso).toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: 'numeric', minute: '2-digit' }).replace(':', ' h ');
+          if (duJour) {
+            const apogee = duJour.type === 'apogee';
+            return (
+              <>
+                <p>
+                  À {heure(duJour.instant)}, elle se trouve à environ {km(duJour.distanceKm)} de la Terre, son point le plus{' '}
+                  {apogee ? 'éloigné' : 'proche'} au cours de cette orbite.
+                </p>
+                <p>À partir de ce moment, la Lune commence progressivement à s&apos;{apogee ? 'approcher' : 'éloigner'} de la Terre.</p>
+              </>
+            );
+          }
+          const suivants = contenu.cycleLunaire.orbite.filter((o) => jourP(o.instant) > ce).slice(0, 2);
+          return (
+            <ul>
+              {suivants.map((o) => (
+                <li key={o.instant}>
+                  Prochain {o.type === 'apogee' ? 'apogée (point le plus éloigné)' : 'périgée (point le plus proche)'} :{' '}
+                  {formaterInstantParis(o.instant)}, à environ {km(o.distanceKm)} de la Terre.
+                </li>
+              ))}
+            </ul>
+          );
+        })()}
         <p>
           Prochaine phase lunaire : {contenu.cycleLunaire.prochaine.libelle}, prévue le{' '}
           {formaterInstantParis(contenu.cycleLunaire.prochaine.instant)}.
@@ -202,6 +249,8 @@ export default async function PageJour({ params }: { params: Promise<Params> }) 
             : `(dans ${contenu.prochainJourFerie.joursRestants} jour${contenu.prochainJourFerie.joursRestants > 1 ? 's' : ''})`}
         </p>
       </section>
+
+      <Partage titre={`Dictons et proverbes du jour — ${date.getDate()} ${MOIS_LONGS[date.getMonth()]} ${date.getFullYear()}`} />
     </main>
   );
 }

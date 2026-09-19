@@ -4,6 +4,7 @@ import { signeZodiaque, signeAstrologieChinoise } from '@/lib/calculs/zodiaque';
 import { convertirEnCalendrierRepublicain } from '@/lib/calculs/calendrier-republicain';
 import { prochainJourFerie } from '@/lib/calculs/jours-feries';
 import { cycleLunaire } from '@/lib/calculs/lune';
+import { saisonsAstronomiques, saisonsMeteo } from '@/lib/calculs/saisons';
 
 export interface ContenuJour {
   date: string; // YYYY-MM-DD
@@ -13,6 +14,8 @@ export interface ContenuJour {
   calendrierRepublicain: ReturnType<typeof convertirEnCalendrierRepublicain>;
   prochainJourFerie: ReturnType<typeof prochainJourFerie>;
   cycleLunaire: ReturnType<typeof cycleLunaire>;
+  saisonAstro: ReturnType<typeof saisonsAstronomiques>;
+  saisonMeteo: ReturnType<typeof saisonsMeteo>;
   saint: {
     nomPrincipal: string;
     presentationHistorique: string | null;
@@ -41,6 +44,8 @@ export async function construireContenuJour(date: Date): Promise<ContenuJour> {
     calendrierRepublicain: convertirEnCalendrierRepublicain(date),
     prochainJourFerie: prochainJourFerie(date),
     cycleLunaire: cycleLunaire(date.getFullYear(), date.getMonth() + 1, date.getDate()),
+    saisonAstro: saisonsAstronomiques(new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 11))),
+    saisonMeteo: saisonsMeteo(date.getFullYear(), date.getMonth() + 1, date.getDate()),
     saint: saint
       ? {
           nomPrincipal: saint.nom_principal,

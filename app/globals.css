@@ -96,6 +96,36 @@ html {
   color: #64748b;
 }
 
+.navigation-jour-courant {
+  color: var(--couleur-accent);
+  font-weight: 700;
+}
+
+.partage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.partage a,
+.partage button {
+  padding: 8px 12px;
+  border: 1px solid var(--couleur-bordure);
+  border-radius: 8px;
+  background: var(--couleur-fond);
+  color: var(--couleur-texte);
+  font-size: 0.9rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.lune-emoji {
+  font-size: 2rem;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
 .navigation-jour a {
   color: var(--couleur-accent);
   text-decoration: none;

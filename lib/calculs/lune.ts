@@ -98,6 +98,8 @@ export function evenementsLunaires(debut: Date, fin: Date): EvenementLunaire[] {
 
 export interface CycleLunaire {
   phase: string;
+  emoji: string;
+  orbite: ExtremeOrbite[];
   prochaine: { libelle: string; instant: string };
   prochainePleineLune: string;
   prochaineNouvelleLune: string;
@@ -115,9 +117,12 @@ export function cycleLunaire(annee: number, mois: number, jour: number): CycleLu
   const dernier = passes[passes.length - 1];
 
   let phase: string;
+  let emoji: string;
   if (jourParis(dernier.instant) === jourParis(reference)) {
     phase = LIBELLES[dernier.type];
+    emoji = { nouvelle_lune: '🌑', premier_quartier: '🌓', pleine_lune: '🌕', dernier_quartier: '🌗' }[dernier.type];
   } else {
+    emoji = { nouvelle_lune: '🌒', premier_quartier: '🌔', pleine_lune: '🌖', dernier_quartier: '🌘' }[dernier.type];
     phase = {
       nouvelle_lune: 'Lune croissante (premier croissant)',
       premier_quartier: 'Lune gibbeuse croissante',
@@ -126,10 +131,67 @@ export function cycleLunaire(annee: number, mois: number, jour: number): CycleLu
     }[dernier.type];
   }
 
+  const orbite = extremesOrbite(new Date(reference.getTime() - 86400000), new Date(reference.getTime() + 31 * 86400000));
+
   return {
     phase,
+    emoji,
+    orbite,
     prochaine: { libelle: LIBELLES[futurs[0].type], instant: futurs[0].instant.toISOString() },
     prochainePleineLune: futurs.find((e) => e.type === 'pleine_lune')!.instant.toISOString(),
     prochaineNouvelleLune: futurs.find((e) => e.type === 'nouvelle_lune')!.instant.toISOString(),
   };
+}
+
+// ---- Distance Terre-Lune (Meeus ch. 47, principaux termes de la série en r) : précision ~ quelques dizaines de km.
+const TERMES_DISTANCE: [number, number, number, number, number][] = [
+  // [D, M, M', F, coefficient (m)]
+  [0, 0, 1, 0, -20905355], [2, 0, -1, 0, -3699111], [2, 0, 0, 0, -2955968], [0, 0, 2, 0, -569925],
+  [0, 1, 0, 0, 48888], [0, 0, 0, 2, -3149], [2, 0, -2, 0, 246158], [2, -1, -1, 0, -152138],
+  [2, 0, 1, 0, -170733], [2, -1, 0, 0, -204586], [0, 1, -1, 0, -129620], [1, 0, 0, 0, 108743],
+  [0, 1, 1, 0, 104755], [2, 0, 0, -2, 10321], [0, 0, 1, -2, 79661], [4, 0, -1, 0, -34782],
+  [0, 0, 3, 0, -23210], [4, 0, -2, 0, -21636], [2, 1, -1, 0, 24208], [2, 1, 0, 0, 30824],
+  [1, 0, -1, 0, -8379], [1, 1, 0, 0, -16675], [2, -1, 1, 0, -12831], [2, 0, 2, 0, -10445],
+  [4, 0, 0, 0, -11650], [2, 0, -3, 0, 14403], [0, 1, -2, 0, -7003], [2, -1, -2, 0, 10056],
+  [1, 0, 1, 0, 6322],
+];
+
+/** Distance Terre-Lune (km) à un instant donné. */
+export function distanceTerreLune(instant: Date): number {
+  const T = (instant.getTime() / 86400000 + 2440587.5 - 2451545) / 36525;
+  const D = 297.8501921 + 445267.1114034 * T;
+  const M = 357.5291092 + 35999.0502909 * T;
+  const Mp = 134.9633964 + 477198.8675055 * T;
+  const F = 93.272095 + 483202.0175233 * T;
+  const E = 1 - 0.002516 * T;
+  let somme = 0;
+  for (const [d, m, mp, f, c] of TERMES_DISTANCE) {
+    somme += c * E ** Math.abs(m) * cos(d * D + m * M + mp * Mp + f * F);
+  }
+  return 385000.56 + somme / 1000;
+}
+
+export interface ExtremeOrbite {
+  type: 'apogee' | 'perigee';
+  instant: string;
+  distanceKm: number;
+}
+
+/** Apogées et périgées entre deux instants (recherche au pas de 30 min autour de chaque extremum). */
+export function extremesOrbite(debut: Date, fin: Date): ExtremeOrbite[] {
+  const pas = 30 * 60000;
+  const resultat: ExtremeOrbite[] = [];
+  let avant = distanceTerreLune(new Date(debut.getTime() - pas));
+  let courant = distanceTerreLune(debut);
+  for (let t = debut.getTime(); t < fin.getTime(); t += pas) {
+    const apres = distanceTerreLune(new Date(t + pas));
+    if (courant > avant && courant >= apres) {
+      resultat.push({ type: 'apogee', instant: new Date(t).toISOString(), distanceKm: courant });
+    } else if (courant < avant && courant <= apres) {
+      resultat.push({ type: 'perigee', instant: new Date(t).toISOString(), distanceKm: courant });
+    }
+    avant = courant;
+    courant = apres;
+  }
+  return resultat;
 }

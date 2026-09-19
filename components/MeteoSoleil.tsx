@@ -27,7 +27,14 @@ interface VilleResultat {
 
 type Etat = 'demande_geoloc' | 'chargement' | 'pret' | 'refuse' | 'erreur';
 
-export default function MeteoSoleil({ date }: { date: string }) {
+export interface SaisonsProps {
+  astroActuelle: string;
+  astroProchaine: { nom: string; libelle: string };
+  meteoActuelle: string;
+  meteoProchaine: { nom: string; libelle: string };
+}
+
+export default function MeteoSoleil({ date, saisons }: { date: string; saisons: SaisonsProps }) {
   const [etat, setEtat] = useState<Etat>('demande_geoloc');
   const [ville, setVille] = useState<string | null>(null);
   const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
@@ -141,6 +148,18 @@ export default function MeteoSoleil({ date }: { date: string }) {
           )}
         </div>
       )}
+
+      <h3>🍃 Saison météo et saison calendrier</h3>
+      <ul>
+        <li>
+          Saison météorologique : <strong>{saisons.meteoActuelle}</strong> — prochaine saison : {saisons.meteoProchaine.nom},{' '}
+          {saisons.meteoProchaine.libelle}.
+        </li>
+        <li>
+          Saison du calendrier (astronomique) : <strong>{saisons.astroActuelle}</strong> — prochaine saison :{' '}
+          {saisons.astroProchaine.nom}, {saisons.astroProchaine.libelle}.
+        </li>
+      </ul>
     </section>
   );
 }

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { dateAujourdhuiParis } from '@/lib/calculs/date-paris';
 
 const MOIS_LONGS = [
   'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
@@ -31,16 +32,17 @@ export default function NavigationJour({
   dateLendemain: Date;
   numeroJourAnnee: number;
 }) {
+  const [ay, am, ad] = dateAujourdhuiParis().split('-').map(Number);
   return (
     <nav className="navigation-jour" aria-label="Navigation entre les jours">
       <p className="navigation-jour-date">
-        Nous sommes le {date.getDate()} {MOIS_LONGS[date.getMonth()]} {date.getFullYear()}
+        Nous sommes le {ad} {MOIS_LONGS[am - 1]} {ay}
       </p>
       <p className="navigation-jour-fil">
         «{' '}
         <Link href={chemin(dateVeille)}>{libelleJourMois(dateVeille)}</Link>
         {' | '}
-        C&apos;est le {ordinal(numeroJourAnnee)} jour de l&apos;année
+        <span className="navigation-jour-courant">C&apos;est le {ordinal(numeroJourAnnee)} jour de l&apos;année</span>
         {' | '}
         <Link href={chemin(dateLendemain)}>{libelleJourMois(dateLendemain)}</Link> »
       </p>
