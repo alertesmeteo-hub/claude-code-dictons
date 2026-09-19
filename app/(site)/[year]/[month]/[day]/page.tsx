@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { construireContenuJour } from '@/lib/calculs/page-jour';
+import { evenementsHistoriques } from '@/lib/evenements/wikipedia';
 import MeteoSoleil from '@/components/MeteoSoleil';
 import NavigationJour from '@/components/NavigationJour';
 
@@ -54,7 +55,10 @@ export default async function PageJour({ params }: { params: Promise<Params> }) 
   const date = parserDate(p);
   if (!date) notFound();
 
-  const contenu = await construireContenuJour(date);
+  const [contenu, evenements] = await Promise.all([
+    construireContenuJour(date),
+    evenementsHistoriques(date.getMonth() + 1, date.getDate()),
+  ]);
 
   const dateVeille = new Date(date);
   dateVeille.setDate(dateVeille.getDate() - 1);
@@ -120,6 +124,28 @@ export default async function PageJour({ params }: { params: Promise<Params> }) 
           <li>Prochaine nouvelle lune : {formaterInstantParis(contenu.cycleLunaire.prochaineNouvelleLune)}</li>
         </ul>
       </section>
+
+      {evenements.length > 0 && (
+        <section aria-labelledby="evenements-historiques">
+          <h2 id="evenements-historiques">Événements historiques du jour</h2>
+          <p>
+            Que s&apos;est-il passé un {date.getDate()} {MOIS_LONGS[date.getMonth()]} ?
+          </p>
+          <ul>
+            {evenements.map((e, i) => (
+              <li key={i}>
+                <strong>{e.annee}</strong> — {e.url ? <a href={e.url} rel="noopener">{e.texte}</a> : e.texte}
+              </li>
+            ))}
+          </ul>
+          <p className="meta-jour">
+            Source :{' '}
+            <a href="https://fr.wikipedia.org/wiki/Wikip%C3%A9dia:Accueil_principal" rel="noopener">Wikipédia</a>, texte sous
+            licence{' '}
+            <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.fr" rel="noopener">CC BY-SA 4.0</a>.
+          </p>
+        </section>
+      )}
 
       <section aria-labelledby="infos-complementaires">
         <h2 id="infos-complementaires">Informations complémentaires</h2>
