@@ -33,13 +33,19 @@ html {
 
 .menu-site ul {
   display: flex;
-  gap: 4px;
-  max-width: 680px;
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: 2px;
+  max-width: 1100px;
   margin: 0 auto;
-  padding: 8px 16px;
+  padding: 8px 12px;
   list-style: none;
   overflow-x: auto;
   white-space: nowrap;
+}
+
+.menu-site li {
+  flex-shrink: 0;
 }
 
 .menu-site a {
@@ -78,9 +84,10 @@ html {
 }
 
 .navigation-jour-date {
-  font-size: clamp(1.6rem, 6vw, 2.4rem);
+  font-size: clamp(1rem, 5vw, 2.2rem);
   font-weight: 700;
   line-height: 1.2;
+  white-space: nowrap;
   margin: 0 0 6px;
 }
 
