@@ -26,6 +26,7 @@ export async function GET() {
           altitudeM: e.altitude_m,
           valeurC: Number(e.valeur_c),
           source: e.source,
+          principale: /réseau principal/.test(e.source),
         })),
       },
       { headers: { 'Cache-Control': 'public, max-age=900', 'Access-Control-Allow-Origin': '*' } }

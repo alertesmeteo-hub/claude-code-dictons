@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Températures Extrêmes France
  * Description: Affiche les températures extrêmes du jour en France (stations sous 500 m) via le shortcode [temperatures_extremes_france]. Consomme l'API du SaaS dicton-du-jour.alertes-meteo.com, ne duplique aucune logique météo.
- * Version: 1.0.2
+ * Version: 1.1.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: Alertes Météo
@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'TEF_VERSION', '1.0.2' );
+define( 'TEF_VERSION', '1.1.0' );
 define( 'TEF_CACHE_KEY', 'tef_extremes_france' );
 define( 'TEF_CACHE_DUREE', 15 * MINUTE_IN_SECONDS );
 define( 'TEF_TIMEOUT_SECONDES', 5 );
@@ -62,7 +62,8 @@ function tef_recuperer_donnees() {
 function tef_shortcode_temperatures_extremes( $atts ) {
 	$atts = shortcode_atts(
 		array(
-			'limite' => 3,
+			'limite'   => 3,
+			'stations' => 'toutes', // « principales » : uniquement le réseau principal Météo-France
 		),
 		$atts,
 		'temperatures_extremes_france'
@@ -81,8 +82,12 @@ function tef_shortcode_temperatures_extremes( $atts ) {
 				<?php
 				// « limite » = nombre de stations affichées pour les maxima ET pour les minima.
 				$limite = max( 1, (int) $atts['limite'] );
-				$maxis  = array_slice( array_values( array_filter( $donnees['donnees'], function ( $l ) { return 'maxi' === $l['type']; } ) ), 0, $limite );
-				$minis  = array_slice( array_values( array_filter( $donnees['donnees'], function ( $l ) { return 'mini' === $l['type']; } ) ), 0, $limite );
+				$source = $donnees['donnees'];
+				if ( 'principales' === strtolower( trim( $atts['stations'] ) ) ) {
+					$source = array_values( array_filter( $source, function ( $l ) { return ! empty( $l['principale'] ); } ) );
+				}
+				$maxis  = array_slice( array_values( array_filter( $source, function ( $l ) { return 'maxi' === $l['type']; } ) ), 0, $limite );
+				$minis  = array_slice( array_values( array_filter( $source, function ( $l ) { return 'mini' === $l['type']; } ) ), 0, $limite );
 				$lignes = array_merge( $maxis, $minis );
 				foreach ( $lignes as $ligne ) :
 					$type_libelle = 'maxi' === $ligne['type'] ? 'MAXI' : 'MINI';

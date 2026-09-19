@@ -27,6 +27,7 @@ interface Station {
   nom: string;
   departement: string;
   altitude: number;
+  principale: boolean; // réseau principal (Pack RADOME) par opposition au réseau étendu
 }
 
 interface Mesure {
@@ -76,12 +77,12 @@ async function listerStations(): Promise<Station[]> {
   const csv = await get(`${DPOBS}/liste-stations`);
   const [entete, ...lignes] = csv.trim().split(/\r?\n/);
   const col = entete.split(';');
-  const [iId, iNom, iAlt] = ['Id_station', 'Nom_usuel', 'Altitude'].map((n) => col.indexOf(n));
-  if (iId < 0 || iNom < 0 || iAlt < 0) throw new Error(`Colonnes inattendues : ${entete}`);
+  const [iId, iNom, iAlt, iPack] = ['Id_station', 'Nom_usuel', 'Altitude', 'Pack'].map((n) => col.indexOf(n));
+  if (iId < 0 || iNom < 0 || iAlt < 0 || iPack < 0) throw new Error(`Colonnes inattendues : ${entete}`);
 
   return lignes
     .map((l) => l.split(';'))
-    .map((c) => ({ id: c[iId], nom: c[iNom], departement: c[iId].slice(0, 2), altitude: Number(c[iAlt]) }))
+    .map((c) => ({ id: c[iId], nom: c[iNom], departement: c[iId].slice(0, 2), altitude: Number(c[iAlt]), principale: c[iPack]?.trim() === 'RADOME' }))
     .filter((s) => s.id.length === 8 && Number.isFinite(s.altitude) && s.altitude < ALTITUDE_MAX_M);
 }
 
@@ -150,7 +151,6 @@ async function extremesDuJour(): Promise<Mesure[]> {
   if (echecs > departements.length * 0.2) throw new Error(`${echecs}/${departements.length} départements en échec`);
   if (maxi.size === 0) throw new Error('Aucune observation du jour trouvée');
 
-  const source = 'Météo-France — DPPaquetObs (données publiques)';
   const versMesure = (id: string, type: 'maxi' | 'mini', e: Extreme): Mesure => {
     const s = parId.get(id)!;
     return {
@@ -161,11 +161,21 @@ async function extremesDuJour(): Promise<Mesure[]> {
       type,
       valeurC: e.v,
       heureMesure: heureParis(e.iso),
-      source,
+      // Le libellé « réseau principal » est lu par le site (champ `principale`) pour le paramètre stations="principales".
+      source: `Météo-France — DPPaquetObs (${s.principale ? 'réseau principal' : 'réseau étendu'})`,
     };
   };
-  const hauts = [...maxi].sort((a, b) => b[1].v - a[1].v).slice(0, NB_PAR_TYPE).map(([id, e]) => versMesure(id, 'maxi', e));
-  const bas = [...mini].sort((a, b) => a[1].v - b[1].v).slice(0, NB_PAR_TYPE).map(([id, e]) => versMesure(id, 'mini', e));
+  // Top N toutes stations + top N des stations du réseau principal (pour que le filtre du plugin reste rempli).
+  const selection = (m: Map<string, Extreme>, type: 'maxi' | 'mini') => {
+    const tri = [...m].sort((a, b) => (type === 'maxi' ? b[1].v - a[1].v : a[1].v - b[1].v));
+    const ids = new Set([
+      ...tri.slice(0, NB_PAR_TYPE).map(([id]) => id),
+      ...tri.filter(([id]) => parId.get(id)!.principale).slice(0, NB_PAR_TYPE).map(([id]) => id),
+    ]);
+    return tri.filter(([id]) => ids.has(id)).map(([id, e]) => versMesure(id, type, e));
+  };
+  const hauts = selection(maxi, 'maxi');
+  const bas = selection(mini, 'mini');
   console.log(`${maxi.size} stations exploitées sur ${departements.length} départements (${echecs} en échec)`);
   return [...hauts, ...bas];
 }
