@@ -74,7 +74,7 @@ export default async function PageJour({ params }: { params: Promise<Params> }) 
         numeroJourAnnee={contenu.infosJourAnnee.numeroJourAnnee}
       />
 
-      <header>
+      <header id="date-du-jour">
         <h1>
           Dictons et proverbes du jour — {date.getDate()} {MOIS_LONGS[date.getMonth()]} {date.getFullYear()}
         </h1>
@@ -89,8 +89,8 @@ export default async function PageJour({ params }: { params: Promise<Params> }) 
           <h2 id="saint-du-jour">Saint du jour : {contenu.saint.nomPrincipal}</h2>
           {contenu.saint.presentationHistorique && <p>{contenu.saint.presentationHistorique}</p>}
           {contenu.saint.autresPrenoms && (
-            <p>
-              <strong>Autres prénoms fêtés :</strong> {contenu.saint.autresPrenoms}
+            <p id="fete-du-jour">
+              <strong>Également en fête :</strong> {contenu.saint.autresPrenoms}
             </p>
           )}
           {contenu.saint.traditions && <p>{contenu.saint.traditions}</p>}

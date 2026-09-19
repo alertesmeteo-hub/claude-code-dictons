@@ -18,6 +18,45 @@ body {
   line-height: 1.5;
 }
 
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 64px;
+}
+
+.menu-site {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--couleur-carte);
+  border-bottom: 1px solid var(--couleur-bordure);
+}
+
+.menu-site ul {
+  display: flex;
+  gap: 4px;
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 8px 16px;
+  list-style: none;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.menu-site a {
+  display: block;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: var(--couleur-texte);
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.menu-site a:hover,
+.menu-site a:focus-visible {
+  background: var(--couleur-fond);
+  color: var(--couleur-accent);
+}
+
 .page-jour {
   max-width: 680px;
   margin: 0 auto;
