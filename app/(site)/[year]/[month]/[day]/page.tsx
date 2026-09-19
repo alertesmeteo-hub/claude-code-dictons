@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { construireContenuJour } from '@/lib/calculs/page-jour';
 import { evenementsHistoriques } from '@/lib/evenements/wikipedia';
 import MeteoSoleil from '@/components/MeteoSoleil';
+import { fetesPopulaires } from '@/lib/calculs/fetes-populaires';
 import Partage from '@/components/Partage';
 import NavigationJour from '@/components/NavigationJour';
 
@@ -66,6 +67,8 @@ export default async function PageJour({ params }: { params: Promise<Params> }) 
   const dateLendemain = new Date(date);
   dateLendemain.setDate(dateLendemain.getDate() + 1);
 
+  const populaires = fetesPopulaires(date.getFullYear(), date.getMonth() + 1, date.getDate());
+
   return (
     <main className="page-jour">
       <NavigationJour
@@ -93,7 +96,7 @@ export default async function PageJour({ params }: { params: Promise<Params> }) 
         </section>
       )}
 
-      {(contenu.fete || contenu.saint?.autresPrenoms) && (
+      {(contenu.fete || contenu.saint?.autresPrenoms || populaires.length > 0) && (
         <section aria-labelledby="fete-du-jour" id="fete-du-jour">
           <h2 id="titre-fete-du-jour">
             Fête du jour : {date.getDate()} {MOIS_LONGS[date.getMonth()]}
@@ -124,6 +127,19 @@ export default async function PageJour({ params }: { params: Promise<Params> }) 
               {contenu.fete.autresFetes.length > 8 && (
                 <p className="meta-jour">et {contenu.fete.autresFetes.length - 8} autres saints ou bienheureux du jour.</p>
               )}
+            </>
+          )}
+          {populaires.length > 0 && (
+            <>
+              <h3>Fêtes populaires</h3>
+              <p className="meta-jour">Fêtes laïques et culturelles célébrées en France.</p>
+              <ul>
+                {populaires.map((f) => (
+                  <li key={f.nom}>
+                    <span aria-hidden="true">{f.emoji}</span> <strong>{f.nom}</strong> ({f.regle})
+                  </li>
+                ))}
+              </ul>
             </>
           )}
           {contenu.fete && (
