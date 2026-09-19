@@ -62,7 +62,8 @@ async function get(url: string): Promise<string> {
     const r = await fetch(url, { headers: { apikey: cle() } });
     const texte = await r.text();
     if (r.ok) return texte;
-    dernier = `HTTP ${r.status} ${texte.slice(0, 150)}`;
+    const detail = texte.match(/<am:description>([^<]*)/)?.[1] ?? texte.slice(0, 150);
+    dernier = `HTTP ${r.status} ${detail}`;
     if (r.status !== 429 && r.status < 500) break;
     await pause(essai * 5000);
   }
@@ -105,7 +106,21 @@ async function extremesDuJour(): Promise<Mesure[]> {
 
   for (const dep of departements) {
     try {
-      const obs = JSON.parse(await get(`${DPPAQUET}/paquet/horaire?id-departement=${dep}&format=json`)) as Observation[];
+      // Selon les départements, l'API attend « 01 » ou « 1 » : on essaie les deux écritures.
+      const ecritures = [...new Set([dep, dep.replace(/^0/, '')])];
+      let brut = '';
+      let erreurDep: unknown = null;
+      for (const ecriture of ecritures) {
+        try {
+          brut = await get(`${DPPAQUET}/paquet/horaire?id-departement=${ecriture}&format=json`);
+          erreurDep = null;
+          break;
+        } catch (e) {
+          erreurDep = e;
+        }
+      }
+      if (erreurDep) throw erreurDep;
+      const obs = JSON.parse(brut) as Observation[];
       for (const o of obs) {
         if (!parId.has(o.geo_id_insee) || jourParis(o.validity_time) !== aujourdhui) continue;
         const haut = o.tx ?? o.t;
