@@ -13,7 +13,7 @@ code{font-family:ui-monospace,monospace}
 </style>
 </head>
 <body>
-<p><a href="/">Accueil</a> · <a href="/playground">Playground</a> · <a href="/cle">Demander une cle</a> · <a href="/statut">Statut</a> · <a href="/dashboard">Espace developpeur</a></p>
+<p><a href="/">Accueil</a> · <a href="/playground">Playground</a> · <a href="/cle">Demander une cle</a> · <a href="/statut">Statut</a> · <a href="/dashboard">Espace developpeur</a> · <a href="https://www.alertes-meteo.com" rel="noopener">Alertes-Meteo.com</a></p>
 <h1>API Alertes-Meteo</h1>
 <p>Une API meteo francaise simple a integrer. Format JSON, cle gratuite. <a href="/openapi.yaml">Fichier OpenAPI</a> (compatible Swagger UI).</p>
 
@@ -124,6 +124,6 @@ print(r.json())</pre>
 <p>Format : <code>{"error":{"code":"...","message":"..."}}</code>. Codes : 401 cle invalide, 403 compte suspendu, 404 inconnu, 422 parametre invalide, 429 quota (voir <code>Retry-After</code> et <code>X-RateLimit-*</code>), 503 indisponible.</p>
 <p>Offre gratuite : 30 requetes/minute, 10 000/mois.</p>
 <hr>
-<p><small>Source : Meteo-France (donnees retraitees par Alertes-Meteo, service non officiel).</small></p>
+<p><small>Source : Meteo-France (donnees retraitees par Alertes-Meteo, service non officiel). Un service <a href="https://www.alertes-meteo.com" rel="noopener">Alertes-Meteo.com</a>.</small></p>
 </body>
 </html>
