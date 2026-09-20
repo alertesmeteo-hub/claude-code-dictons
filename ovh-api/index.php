@@ -366,6 +366,29 @@ switch ("$methode:$route") {
 		}
 		repondre(['ok' => true, 'compte' => $compte]);
 
+	// ---- Vigilance historique nationale (2001+, sans détail département — voir backfill-vigilance-national.ts) ----
+	case 'POST:vigilance/national':
+		$db->query(
+			'CREATE TABLE IF NOT EXISTS vigilance_national_jour (
+				date DATE NOT NULL PRIMARY KEY,
+				couleur TINYINT NOT NULL,
+				commentaire VARCHAR(255) NULL,
+				fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+		);
+		$d = corpsJson();
+		$compte = 0;
+		$stmt = $db->prepare(
+			'INSERT INTO vigilance_national_jour (date, couleur, commentaire) VALUES (?, ?, ?)
+			 ON DUPLICATE KEY UPDATE couleur=VALUES(couleur), commentaire=VALUES(commentaire), fetched_at=CURRENT_TIMESTAMP'
+		);
+		foreach (($d['jours'] ?? []) as $j) {
+			$stmt->bind_param('sis', $j['date'], $j['couleur'], $j['commentaire']);
+			$stmt->execute();
+			$compte++;
+		}
+		repondre(['ok' => true, 'compte' => $compte]);
+
 	// ---- Journal des tâches ----
 	case 'GET:sync-logs':
 		$limite = min((int)($_GET['limite'] ?? 20), 200);

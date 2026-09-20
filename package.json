@@ -13,6 +13,7 @@
     "cron:extremes-meteo": "tsx scripts/cron-extremes-meteo.ts",
     "cron:vigilance-meteo": "tsx scripts/cron-vigilance-meteo.ts",
     "backfill:vigilance": "tsx scripts/backfill-vigilance.ts",
+    "backfill:vigilance-national": "tsx scripts/backfill-vigilance-national.ts",
     "test": "vitest run"
   },
   "dependencies": {

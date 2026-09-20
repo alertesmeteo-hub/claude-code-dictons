@@ -112,7 +112,11 @@ Un passage = ~95 appels espacés de 1,5 s (2-3 minutes). Le script garde les 15 
 
 Une entrée par (date, heure de bulletin, échéance, département) est conservée : un même jour peut compter plusieurs bulletins (~6h, 16h, réévaluations en cours d'événement), chacun archivé séparément. Les tables `vigilance_carte` et `vigilance_textes` se créent automatiquement au premier appel (comme `fetes_jour`) — pas besoin de passer par phpMyAdmin pour celles-ci.
 
-**Historique (2022 → aujourd'hui)** : `npm run backfill:vigilance -- --depuis=2022-01-01 --jusqu-a=2022-12-31` importe, une fois, l'archive publique [« Vigilance météorologique archivée »](https://www.data.gouv.fr/datasets/vigilance-meteorologique-archivee) (`files.data.gouv.fr/meteofrance/data/vigilance/metropole/AAAA/MM/JJ/HHMMSS/CDP_CARTE_EXTERNE.json`, même format que l'API temps réel). Cette archive ne remonte qu'à **2022** (pas d'historique officiel connu avant, alors que la vigilance existe depuis 2001) et ne contient pas de texte de synthèse (uniquement la carte). Script à lancer manuellement (pas planifié), idempotent, avec pause entre les appels — un backfill complet représente plusieurs milliers de requêtes et peut prendre des heures.
+**Historique détail département (fin 2022 → aujourd'hui)** : `npm run backfill:vigilance -- --depuis=2022-11-28` importe, une fois, l'archive publique [« Vigilance météorologique archivée »](https://www.data.gouv.fr/datasets/vigilance-meteorologique-archivee) (`files.data.gouv.fr/meteofrance/data/vigilance/metropole/AAAA/MM/JJ/HHMMSS/CDP_CARTE_EXTERNE.json`, même format que l'API temps réel — couleur par département, pas de texte de synthèse). Table `vigilance_carte`.
+
+**Historique national (octobre 2001 → aujourd'hui)** : `npm run backfill:vigilance-national -- --depuis=2001-10` importe, une fois, l'archive officielle [vigilance-public.meteo.fr](http://vigilance-public.meteo.fr/) (`tableaux_mensuels.php?start_date=AAAA-MM`, un appel par mois). Cette archive remonte à la création du dispositif (2001), mais ne donne que la **couleur maximale nationale** par jour (pas de détail département — celui-ci n'existe pour cette période que sous forme de cartes GIF, non exploitées ici). Table `vigilance_national_jour`.
+
+Les deux scripts sont à lancer manuellement (pas planifiés), idempotents, avec pause entre les appels — peuvent prendre plusieurs heures pour un backfill complet.
 
 GitHub Actions (`.github/workflows/cron-jobs.yml`) reste disponible ; secrets nécessaires : `OVH_API_URL`, `OVH_API_TOKEN`, `METEOFRANCE_API_KEY`.
 
@@ -157,6 +161,7 @@ Toutes les routes nécessitent l'en-tête `Authorization: Bearer <DICTON_API_TOK
 | `?route=extremes/france` | POST | Enregistrer des mesures (`{mesures: [...]}`) |
 | `?route=vigilance/france` | GET | Bulletin de vigilance archivé du jour (carte + texte) |
 | `?route=vigilance/france` | POST | Enregistrer un bulletin (`{carte: [...], texte}`) |
+| `?route=vigilance/national` | POST | Enregistrer l'historique national (`{jours: [...]}`, backfill 2001+) |
 | `?route=sync-logs&limite=` | GET | Derniers logs de tâches |
 | `?route=sync-logs` | POST | Ajouter un log |
 | `?route=pages-jour` | POST | Traçabilité génération du jour |

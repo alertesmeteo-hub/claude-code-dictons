@@ -96,6 +96,12 @@ export interface VigilanceTexteApi {
   fetched_at: string;
 }
 
+export interface VigilanceNationalJourApi {
+  date: string;
+  couleur: 1 | 2 | 3 | 4;
+  commentaire: string | null;
+}
+
 export interface FeteJourApi {
   prenoms: string[];
   autresFetes: { nom: string; description: string | null; url: string }[];
@@ -147,6 +153,9 @@ export const ovhApi = {
       method: 'POST',
       body: JSON.stringify({ date, heure, carte, texte }),
     }),
+
+  vigilanceNationalEnregistrer: (jours: VigilanceNationalJourApi[]) =>
+    appelerApi<{ ok: true; compte: number }>('vigilance/national', { method: 'POST', body: JSON.stringify({ jours }) }),
 
   syncLogsListe: (limite = 20) => appelerApi<SyncLogApi[]>(`sync-logs&limite=${limite}`),
 

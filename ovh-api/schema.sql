@@ -84,6 +84,13 @@ CREATE TABLE IF NOT EXISTS vigilance_carte (
   UNIQUE KEY uniq_date_heure_echeance_dep (date, heure, echeance, departement)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS vigilance_national_jour (
+  date DATE NOT NULL PRIMARY KEY,
+  couleur TINYINT NOT NULL, -- 1 vert, 2 jaune, 3 orange, 4 rouge (niveau national max du jour, pas de detail departement)
+  commentaire VARCHAR(255) NULL,
+  fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS vigilance_textes (
   id INT AUTO_INCREMENT PRIMARY KEY,
   date DATE NOT NULL,
