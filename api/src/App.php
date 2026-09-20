@@ -25,11 +25,40 @@ final class App
 
     public static function db(): PDO
     {
-        return self::$pdo ??= new PDO(self::env('DB_DSN'), self::env('DB_USER'), self::env('DB_PASS'), [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES => false,
-        ]);
+        if (self::$pdo === null) {
+            $pdo = new PDO(self::env('DB_DSN'), self::env('DB_USER'), self::env('DB_PASS'), [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES => false,
+            ]);
+            self::ensureSchema($pdo);
+            self::$pdo = $pdo;
+        }
+        return self::$pdo;
+    }
+
+    /**
+     * Cree les tables manquantes au premier appel (aucun SQL a coller dans phpMyAdmin).
+     * schema.sql est idempotent (CREATE TABLE IF NOT EXISTS) ; il est rejoue quand son contenu change.
+     * Limite : ne gere pas les ALTER sur des tables existantes.
+     */
+    private static function ensureSchema(PDO $pdo): void
+    {
+        $file = __DIR__ . '/../schema.sql';
+        $sql = is_file($file) ? (string) file_get_contents($file) : '';
+        if ($sql === '') {
+            return;
+        }
+        $hash = md5($sql);
+        $pdo->exec('CREATE TABLE IF NOT EXISTS schema_meta (id TINYINT UNSIGNED PRIMARY KEY, hash CHAR(32) NOT NULL) ENGINE=InnoDB');
+        if ($pdo->query('SELECT hash FROM schema_meta WHERE id = 1')->fetchColumn() === $hash) {
+            return;
+        }
+        $clean = preg_replace('/--[^\n]*/', '', $sql);
+        foreach (array_filter(array_map('trim', explode(';', $clean))) as $stmt) {
+            $pdo->exec($stmt);
+        }
+        $pdo->prepare('INSERT INTO schema_meta (id, hash) VALUES (1, ?) ON DUPLICATE KEY UPDATE hash = VALUES(hash)')->execute([$hash]);
     }
 
     public static function json(int $status, array $body, array $headers = []): never
