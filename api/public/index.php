@@ -17,7 +17,7 @@ try {
     }
 
     if ($path === '/v1/status' && $method === 'GET') {
-        $limits = ['extremes' => 3 * 3600, 'vigilance' => 45 * 60, 'records' => 3 * 3600]; // age max avant de considerer une source en retard
+        $limits = ['extremes' => 3 * 3600, 'vigilance' => 45 * 60, 'records' => 3 * 3600, 'rain' => 90 * 60]; // age max avant de considerer une source en retard
         $st = App::db()->prepare("SELECT status, message, finished_at FROM collector_runs WHERE name = ? ORDER BY finished_at DESC LIMIT 1");
         $sources = [];
         foreach ($limits as $name => $max) {
@@ -95,6 +95,80 @@ try {
                 'complete' => $snap['departments_ok'] === $snap['departments_total']],
             'filters' => ['kind' => $kind, 'scope' => $scope, 'department' => $dep],
             'notice' => 'Records du jour calcules sur l\'historique de chaque station ; valeurs provisoires, non officielles. Ne pas presenter comme records de France.',
+        ]);
+    }
+
+    if ($path === '/v1/rain' && $method === 'GET') {
+        Auth::guard('rain');
+        // metrique => [colonne, colonne de completude ou null]
+        $metrics = ['rr1' => ['rr1', null], 'rr24' => ['rr24', 'rr24_complete'], 'rr48' => ['rr48', 'rr48_complete'], 'rr72' => ['rr72', 'rr72_complete'],
+            'month' => ['rr_month', 'rr_month_complete'], 'season' => ['rr_season', 'rr_season_complete'], 'year' => ['rr_year', 'rr_year_complete']];
+        $sort = $_GET['sort'] ?? 'rr24';
+        if (!isset($metrics[$sort])) {
+            App::error(422, 'invalid_sort', 'sort : rr1, rr24, rr48, rr72, month, season ou year.');
+        }
+        $dep = $_GET['department'] ?? null;
+        if ($dep !== null && !preg_match('/^(\d{2}|2[AB])$/', (string) $dep)) {
+            App::error(422, 'invalid_department', 'department : code sur 2 caracteres (ex. 30, 2A).');
+        }
+        $station = $_GET['station'] ?? null;
+        if ($station !== null && !preg_match('/^[0-9A-Z]{8}$/', (string) $station)) {
+            App::error(422, 'invalid_station', 'station : identifiant de 8 caracteres.');
+        }
+        $completeOnly = ($_GET['complete_only'] ?? '0') === '1';
+        $limit = filter_input(INPUT_GET, 'limit', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 200]]);
+        $offset = filter_input(INPUT_GET, 'offset', FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'max_range' => 100000]]);
+        if ((isset($_GET['limit']) && !$limit) || (isset($_GET['offset']) && $offset === false)) {
+            App::error(422, 'invalid_pagination', 'limit : 1 a 200 ; offset : entier >= 0.');
+        }
+        $limit = $limit ?: 50;
+        $offset = $offset ?: 0;
+
+        $db = App::db();
+        $snap = $db->query('SELECT generated_at, latest_observation_at, stations, fetched_at FROM rain_snapshot WHERE id = 1')->fetch();
+        if (!$snap) {
+            App::error(503, 'no_data', 'Aucune donnee de pluie disponible.');
+        }
+        [$col, $completeCol] = $metrics[$sort];
+        $where = "$col IS NOT NULL";
+        $args = [];
+        if ($dep !== null) { $where .= ' AND department = ?'; $args[] = $dep; }
+        if ($station !== null) { $where .= ' AND station_id = ?'; $args[] = $station; }
+        if ($completeOnly && $completeCol !== null) { $where .= " AND $completeCol = 1"; }
+        $count = $db->prepare("SELECT COUNT(*) FROM rain_stations WHERE $where");
+        $count->execute($args);
+        $total = (int) $count->fetchColumn();
+        $st = $db->prepare("SELECT * FROM rain_stations WHERE $where ORDER BY $col DESC, station_id LIMIT $limit OFFSET $offset");
+        $st->execute($args);
+        $f = static fn($v) => $v === null ? null : (float) $v;
+        $b = static fn($v) => $v === null ? null : (bool) $v;
+        $i = static fn($v) => $v === null ? null : (int) $v;
+        $items = [];
+        foreach ($st->fetchAll() as $r) {
+            $items[] = ['station_id' => $r['station_id'], 'name' => $r['name'], 'department' => $r['department'], 'lat' => $f($r['lat']), 'lon' => $f($r['lon']),
+                'observed_at' => $r['observed_at'] ? gmdate('c', strtotime($r['observed_at'] . ' UTC')) : null,
+                'rain_mm' => [
+                    'last_hour' => $f($r['rr1']),
+                    'last_24h' => ['value' => $f($r['rr24']), 'hours_covered' => $i($r['rr24_hours']), 'complete' => $b($r['rr24_complete'])],
+                    'last_48h' => ['value' => $f($r['rr48']), 'hours_covered' => $i($r['rr48_hours']), 'complete' => $b($r['rr48_complete'])],
+                    'last_72h' => ['value' => $f($r['rr72']), 'hours_covered' => $i($r['rr72_hours']), 'complete' => $b($r['rr72_complete'])],
+                    'month' => ['value' => $f($r['rr_month']), 'complete' => $b($r['rr_month_complete'])],
+                    'season' => ['value' => $f($r['rr_season']), 'complete' => $b($r['rr_season_complete'])],
+                    'year' => ['value' => $f($r['rr_year']), 'complete' => $b($r['rr_year_complete'])],
+                ],
+                'normals_1991_2020_mm' => ['month' => $f($r['rr_month_mean']), 'year' => $f($r['rr_year_mean'])]];
+        }
+        $age = time() - strtotime($snap['generated_at'] . ' UTC');
+        App::ok(['total' => $total, 'limit' => $limit, 'offset' => $offset, 'items' => $items], [
+            'source' => 'Meteo-France, Package Observations V2 et donnees climatologiques quotidiennes, cumuls calcules par Alertes-Meteo',
+            'generated_at' => gmdate('c', strtotime($snap['generated_at'] . ' UTC')),
+            'latest_observation_at' => $snap['latest_observation_at'] ? gmdate('c', strtotime($snap['latest_observation_at'] . ' UTC')) : null,
+            'updated_at' => gmdate('c', strtotime($snap['fetched_at'] . ' UTC')),
+            'stale' => $age > 90 * 60,
+            'scope' => 'metropole',
+            'stations_in_dataset' => (int) $snap['stations'],
+            'filters' => ['sort' => $sort, 'department' => $dep, 'station' => $station, 'complete_only' => $completeOnly],
+            'notice' => 'Cumuls provisoires, non valides climatologiquement. Un cumul avec complete=false porte sur moins d\'heures que la periode annoncee : ne pas le presenter comme un cumul complet.',
         ]);
     }
 

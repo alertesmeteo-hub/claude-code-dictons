@@ -128,3 +128,31 @@ CREATE TABLE records_events (
   PRIMARY KEY (kind, station_id),
   KEY idx_dep (department)
 ) ENGINE=InnoDB;
+
+-- Pluie observee, metropole (cron/collect_rain.php)
+CREATE TABLE rain_snapshot (
+  id TINYINT UNSIGNED PRIMARY KEY,
+  generated_at DATETIME NOT NULL,          -- UTC, generation du fichier source
+  latest_observation_at DATETIME NULL,     -- UTC
+  stations INT NOT NULL,
+  fetched_at DATETIME NOT NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE rain_stations (
+  station_id CHAR(8) NOT NULL PRIMARY KEY,
+  name VARCHAR(80) NOT NULL,
+  department CHAR(2) NOT NULL,
+  lat DECIMAL(8,5) NULL,
+  lon DECIMAL(8,5) NULL,
+  observed_at DATETIME NULL,               -- UTC
+  rr1 DECIMAL(6,1) NULL,
+  rr24 DECIMAL(6,1) NULL, rr24_hours TINYINT UNSIGNED NULL, rr24_complete TINYINT(1) NULL,
+  rr48 DECIMAL(6,1) NULL, rr48_hours TINYINT UNSIGNED NULL, rr48_complete TINYINT(1) NULL,
+  rr72 DECIMAL(6,1) NULL, rr72_hours TINYINT UNSIGNED NULL, rr72_complete TINYINT(1) NULL,
+  rr_month DECIMAL(6,1) NULL, rr_month_complete TINYINT(1) NULL,
+  rr_season DECIMAL(6,1) NULL, rr_season_complete TINYINT(1) NULL,
+  rr_year DECIMAL(7,1) NULL, rr_year_complete TINYINT(1) NULL,
+  rr_month_mean DECIMAL(6,1) NULL,         -- normale 1991-2020
+  rr_year_mean DECIMAL(7,1) NULL,
+  KEY idx_dep (department)
+) ENGINE=InnoDB;
