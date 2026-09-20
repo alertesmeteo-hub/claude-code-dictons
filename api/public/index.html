@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>API météo France gratuite | Alertes-Meteo</title>
+<meta name="description" content="Une API météo française simple à intégrer : vigilance, températures extrêmes, pluie, records et lever du soleil. Clé gratuite, réponses JSON, documentation et exemples.">
+<link rel="canonical" href="https://api.alertes-meteo.com/">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<header class="site"><div class="wrap">
+  <a class="logo" href="/">Alertes-Meteo API</a>
+  <nav aria-label="Navigation principale">
+    <a href="/docs">Documentation</a><a href="/statut">Statut</a><a href="/dashboard">Espace développeur</a><a href="/cle">Demander une clé</a>
+  </nav>
+</div></header>
+
+<main class="wrap">
+  <h1>Une API météo française simple à intégrer</h1>
+  <p class="lead">Vigilance, températures extrêmes, pluie, records du jour et lever du soleil, en JSON, avec une clé gratuite. Chaque réponse indique sa source, sa fraîcheur et sa couverture.</p>
+  <div class="actions">
+    <a class="btn" href="/cle">Demander une clé gratuite</a>
+    <a class="btn secondary" href="/docs">Lire la documentation</a>
+  </div>
+
+  <h2>Les données disponibles</h2>
+  <div class="grid">
+    <div class="card"><h3>Vigilance</h3><p>Niveaux par département et par phénomène, aujourd'hui et demain. Service non officiel, à titre informatif.</p></div>
+    <div class="card"><h3>Températures extrêmes</h3><p>Maximum et minimum du jour parmi les stations collectées, avec filtre d'altitude et indicateur de couverture.</p></div>
+    <div class="card"><h3>Pluie</h3><p>Cumuls par station en métropole : 1 h, 24 h, 48 h, 72 h, mois, saison et année, avec complétude de chaque cumul.</p></div>
+    <div class="card"><h3>Records du jour</h3><p>Records de température calculés sur l'historique de chaque station. Provisoires et non officiels.</p></div>
+    <div class="card"><h3>Soleil</h3><p>Lever, coucher, midi solaire, aube et crépuscule, calculés localement pour n'importe quelles coordonnées.</p></div>
+  </div>
+
+  <h2>Un exemple</h2>
+  <pre>curl "https://api.alertes-meteo.com/v1/sun?lat=48.8566&amp;lon=2.3522" \
+  -H "X-API-Key: VOTRE_CLE"</pre>
+  <p class="muted">Des exemples en JavaScript, PHP et Python sont dans la <a href="/docs">documentation</a>. Le fichier <a href="/openapi.yaml">OpenAPI</a> est aussi disponible.</p>
+
+  <h2>Gratuit</h2>
+  <p>L'API est gratuite : 30 requêtes par minute et 10 000 par mois avec une clé. Les demandes de clé sont examinées manuellement, puis la clé est envoyée par email et reste valable 2 ans.</p>
+
+  <h2>Transparence</h2>
+  <ul>
+    <li>Les données Météo-France sont réutilisées sous Licence Ouverte Etalab et retraitées par Alertes-Meteo.</li>
+    <li>Ce service n'est ni officiel ni validé par Météo-France : pour la vigilance officielle, consultez vigilance.meteofrance.fr.</li>
+    <li>Chaque réponse indique si la donnée est en retard (<code>stale</code>) et sa couverture.</li>
+    <li>Aucun historique de localisation n'est conservé : seuls des compteurs d'usage agrégés par clé.</li>
+  </ul>
+</main>
+
+<footer class="site"><div class="wrap">
+  Source : Météo-France (données retraitées par Alertes-Meteo, service non officiel).
+  <a href="/statut">Statut du service</a>
+</div></footer>
+</body>
+</html>

@@ -1,0 +1,4 @@
+User-agent: *
+Disallow: /dashboard
+Disallow: /v1/
+Sitemap: https://api.alertes-meteo.com/sitemap.xml

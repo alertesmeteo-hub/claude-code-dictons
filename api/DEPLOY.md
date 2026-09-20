@@ -42,6 +42,7 @@ curl -H "X-API-Key: <cle>" "https://api.alertes-meteo.com/v1/vigilance?min_level
 curl -H "X-API-Key: <cle>" "https://api.alertes-meteo.com/v1/extremes/france?altitude_max=500"
 php -d zend.assertions=1 tests/sun_test.php
 ```
+Pages a ouvrir dans le navigateur : `/` , `/docs`, `/cle`, `/statut`, `/dashboard` (le dashboard demande une cle valide). Le `.htaccess` doit autoriser `mod_rewrite` et, si possible, `mod_headers` (en-tetes de securite).
 `/v1/status` doit repondre `ok` ; `degraded` signifie qu'une source est en retard.
 
 ## 9. Sauvegardes et supervision
