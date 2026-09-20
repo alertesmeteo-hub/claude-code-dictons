@@ -367,6 +367,16 @@ switch ("$methode:$route") {
 		repondre(['ok' => true, 'compte' => $compte]);
 
 	// ---- Vigilance historique nationale (2001+, sans détail département — voir backfill-vigilance-national.ts) ----
+	case 'GET:vigilance/national':
+		$annee = (int)($_GET['annee'] ?? 0);
+		$mois = (int)($_GET['mois'] ?? 0);
+		if ($annee < 2001 || $mois < 1 || $mois > 12) repondre(['erreur' => 'annee et mois requis (mois valide)'], 400);
+		$debut = sprintf('%04d-%02d-01', $annee, $mois);
+		$stmt = $db->prepare('SELECT date, couleur, commentaire FROM vigilance_national_jour WHERE date >= ? AND date < DATE_ADD(?, INTERVAL 1 MONTH) ORDER BY date ASC');
+		$stmt->bind_param('ss', $debut, $debut);
+		$stmt->execute();
+		repondre($stmt->get_result()->fetch_all(MYSQLI_ASSOC));
+
 	case 'POST:vigilance/national':
 		$db->query(
 			'CREATE TABLE IF NOT EXISTS vigilance_national_jour (
@@ -390,6 +400,22 @@ switch ("$methode:$route") {
 		repondre(['ok' => true, 'compte' => $compte]);
 
 	// ---- Vigilance historique par département (2001+, source tierce vigiscript.fr — voir backfill-vigilance-departement.ts) ----
+	case 'GET:vigilance/departement-historique':
+		$departement = $_GET['departement'] ?? '';
+		$annee = (int)($_GET['annee'] ?? 0);
+		$mois = (int)($_GET['mois'] ?? 0);
+		if (!preg_match('/^(\d{2}|2A|2B)$/', $departement) || $annee < 2001 || $mois < 1 || $mois > 12) {
+			repondre(['erreur' => 'departement, annee et mois requis (departement/mois valides)'], 400);
+		}
+		$debut = sprintf('%04d-%02d-01', $annee, $mois);
+		$stmt = $db->prepare(
+			'SELECT date, couleur FROM vigilance_departement_jour
+			 WHERE departement = ? AND date >= ? AND date < DATE_ADD(?, INTERVAL 1 MONTH) ORDER BY date ASC'
+		);
+		$stmt->bind_param('sss', $departement, $debut, $debut);
+		$stmt->execute();
+		repondre($stmt->get_result()->fetch_all(MYSQLI_ASSOC));
+
 	case 'POST:vigilance/departement-historique':
 		$db->query(
 			'CREATE TABLE IF NOT EXISTS vigilance_departement_jour (

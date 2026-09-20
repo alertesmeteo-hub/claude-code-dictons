@@ -163,11 +163,17 @@ export const ovhApi = {
   vigilanceNationalEnregistrer: (jours: VigilanceNationalJourApi[]) =>
     appelerApi<{ ok: true; compte: number }>('vigilance/national', { method: 'POST', body: JSON.stringify({ jours }) }),
 
+  vigilanceNationalMois: (annee: number, mois: number) =>
+    appelerApi<VigilanceNationalJourApi[]>(`vigilance/national&annee=${annee}&mois=${mois}`),
+
   vigilanceDepartementHistoriqueEnregistrer: (jours: VigilanceDepartementJourApi[]) =>
     appelerApi<{ ok: true; compte: number }>('vigilance/departement-historique', {
       method: 'POST',
       body: JSON.stringify({ jours }),
     }),
+
+  vigilanceDepartementMois: (departement: string, annee: number, mois: number) =>
+    appelerApi<VigilanceDepartementJourApi[]>(`vigilance/departement-historique&departement=${departement}&annee=${annee}&mois=${mois}`),
 
   syncLogsListe: (limite = 20) => appelerApi<SyncLogApi[]>(`sync-logs&limite=${limite}`),
 
