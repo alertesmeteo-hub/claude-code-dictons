@@ -60,7 +60,7 @@ try {
     }
 
     if ($path === '/v1/status' && $method === 'GET') {
-        $limits = ['extremes' => 3 * 3600, 'vigilance' => 45 * 60, 'records' => 3 * 3600, 'rain' => 90 * 60]; // age max avant de considerer une source en retard
+        $limits = ['extremes' => 3 * 3600, 'vigilance' => 90 * 60, 'records' => 3 * 3600, 'rain' => 120 * 60]; // age max avant de considerer une source en retard
         $st = App::db()->prepare("SELECT status, message, finished_at FROM am_collector_runs WHERE name = ? ORDER BY finished_at DESC LIMIT 1");
         $sources = [];
         foreach ($limits as $name => $max) {
@@ -207,7 +207,7 @@ try {
             'generated_at' => gmdate('c', strtotime($snap['generated_at'] . ' UTC')),
             'latest_observation_at' => $snap['latest_observation_at'] ? gmdate('c', strtotime($snap['latest_observation_at'] . ' UTC')) : null,
             'updated_at' => gmdate('c', strtotime($snap['fetched_at'] . ' UTC')),
-            'stale' => $age > 90 * 60,
+            'stale' => $age > 120 * 60,
             'scope' => 'metropole',
             'stations_in_dataset' => (int) $snap['stations'],
             'filters' => ['sort' => $sort, 'department' => $dep, 'station' => $station, 'complete_only' => $completeOnly],
@@ -420,7 +420,7 @@ try {
             'source' => 'Meteo-France, produit DPVigilance, retraite par Alertes-Meteo',
             'product_at' => gmdate('c', strtotime($snap['product_datetime'] . ' UTC')),
             'updated_at' => gmdate('c', strtotime($snap['fetched_at'] . ' UTC')),
-            'stale' => $age > 45 * 60,
+            'stale' => $age > 90 * 60,
             'filters' => ['domain' => $domain, 'echeance' => $ech, 'min_level' => $minLevel],
             'notice' => 'Service non officiel, a titre informatif. Reference : vigilance.meteofrance.fr.',
         ]);
