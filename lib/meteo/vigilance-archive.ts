@@ -5,6 +5,8 @@
  * Couverture : 2001-10-01 → environ 2022 (au-delà, l'archive officielle est vide : voir data.gouv.fr).
  */
 
+import { DEPARTEMENTS_FR, codesDepuisNoms } from './departements-fr';
+
 export const ARCHIVE_BASE = 'http://vigilance-public.meteo.fr';
 
 /** Bits des phénomènes (numérotation officielle 1 à 9 = bit 1 à 9). */
@@ -90,3 +92,89 @@ export const urlBulletin = (b: Pick<BulletinArchive, 'bulletinId' | 'base'>) =>
   `${ARCHIVE_BASE}/vigi.php?type=bulletin&id=${b.bulletinId}&base=${b.base}`;
 
 export const urlPageJour = (date: string) => `${ARCHIVE_BASE}/vigilanceDate.php?dateVigi=${date}`;
+
+// ───────────────────────── Texte intégral d'un bulletin ─────────────────────────
+
+
+/** Statut d'un département dans un bulletin de suivi. */
+export const STATUT_SUIVI = { debut: 1, maintien: 2, fin: 3 } as const;
+export type StatutSuivi = (typeof STATUT_SUIVI)[keyof typeof STATUT_SUIVI];
+
+export interface BulletinTexte {
+  /** Texte brut intégral (mise en forme d'origine conservée). */
+  texte: string;
+  /** Niveau maximal cité dans le bulletin (2 jaune, 3 orange, 4 rouge) ou null. */
+  niveauMax: 2 | 3 | 4 | null;
+  /** Départements cités comme suivis, avec leur statut. */
+  departements: { code: string; statut: StatutSuivi }[];
+}
+
+/** HTML d'un bulletin (`<pre>` pour la base ancienne, blocs HTML pour la base récente) → texte brut. */
+export function texteDepuisHtml(html: string): string {
+  const pre = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
+  let t = pre
+    ? pre[1]
+    : html
+        .replace(/<style[\s\S]*?<\/style>/gi, '')
+        .replace(/<script[\s\S]*?<\/script>/gi, '')
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/(p|div|h1|h2|h3|li|tr)>/gi, '\n')
+        .replace(/<[^>]+>/g, '');
+  t = decoderEntites(t).replace(/\r/g, '');
+  return t.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+const NIVEAUX: Record<string, 2 | 3 | 4> = { jaune: 2, orange: 3, rouge: 4 };
+
+/** Couleurs citées sous la forme « Neige-Verglas/Orange » ; renvoie le niveau le plus élevé. */
+export function niveauMaxDepuisTexte(texte: string): 2 | 3 | 4 | null {
+  let max: 2 | 3 | 4 | null = null;
+  for (const m of texte.matchAll(/\b[A-Za-zÀ-ÿ' -]{3,40}\/(Jaune|Orange|Rouge)\b/g)) {
+    const n = NIVEAUX[m[1].toLowerCase()];
+    if (!max || n > max) max = n;
+  }
+  return max;
+}
+
+const ENTETE_SUIVI = /(D[ée]but|Maintien|Fin) de suivi pour[^:\n]*:/gi;
+const STATUT_PAR_MOT: Record<string, StatutSuivi> = { debut: 1, début: 1, maintien: 2, fin: 3 };
+
+/** Codes des départements suivis, par statut. Formats gérés : « Maintien de suivi pour … : Aude (11), … »,
+ *  blocs récents « Début / Maintien / Fin de suivi pour : », et l'ancien « Lieux concernés par l'événement : noms ». */
+export function departementsDepuisTexte(texte: string): { code: string; statut: StatutSuivi }[] {
+  const res = new Map<string, StatutSuivi>();
+  const codesDe = (segment: string) => {
+    const codes = new Set<string>();
+    for (const m of segment.matchAll(/\(\s*(\d{2}|2A|2B)\s*\)/g)) if (m[1] in DEPARTEMENTS_FR) codes.add(m[1]);
+    if (/\bAndorre\b/i.test(segment)) codes.add('99');
+    return codes;
+  };
+
+  const entetes = [...texte.matchAll(ENTETE_SUIVI)];
+  entetes.forEach((e, i) => {
+    const debut = (e.index ?? 0) + e[0].length;
+    const finBrute = i + 1 < entetes.length ? entetes[i + 1].index ?? texte.length : texte.length;
+    // Le segment s'arrête au prochain paragraphe titré (Qualification, Description…) ou à la prochaine section.
+    let segment = texte.slice(debut, finBrute);
+    const coupe = segment.search(/\n\s*\n\s*(Qualification|Description|Faits nouveaux|Situation|Cons[ée]quences|Conseils|Localisation|Evolution)/i);
+    if (coupe !== -1) segment = segment.slice(0, coupe);
+    const mot = e[1].toLowerCase();
+    const statut = STATUT_PAR_MOT[mot] ?? STATUT_PAR_MOT[mot.normalize('NFD').replace(/[̀-ͯ]/g, '')] ?? 2;
+    for (const c of codesDe(segment)) if (!res.has(c) || statut < (res.get(c) as number)) res.set(c, statut);
+  });
+
+  if (res.size === 0) {
+    // Ancien format : « Lieux concernés par l'événement : Cotes d'Armor Finistère Morbihan »
+    const lieux = texte.match(/Lieux concern[ée]s par l['’]?[ée]v[ée]nement\s*:\s*([^\n]+)/i);
+    if (lieux) for (const c of codesDepuisNoms(lieux[1])) res.set(c, STATUT_PAR_MOT.maintien);
+    for (const c of codesDe(lieux?.[1] ?? '')) res.set(c, STATUT_PAR_MOT.maintien);
+  }
+  return [...res.entries()].map(([code, statut]) => ({ code, statut })).sort((a, b) => a.code.localeCompare(b.code));
+}
+
+/** HTML d'un bulletin → texte + niveau + départements. Fonction pure. */
+export function parserBulletin(html: string): BulletinTexte {
+  const texte = texteDepuisHtml(html);
+  return { texte, niveauMax: niveauMaxDepuisTexte(texte), departements: departementsDepuisTexte(texte) };
+}

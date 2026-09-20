@@ -127,6 +127,32 @@ function assurerTableVigilanceBulletins($db) {
 	);
 }
 
+// Texte intégral des bulletins (compressé : environ 3 fois moins de place) et départements suivis, avec leur statut
+// (1 début de suivi, 2 maintien, 3 fin). Tables créées automatiquement au premier appel.
+function assurerTablesVigilanceTextes($db) {
+	assurerTableVigilanceBulletins($db);
+	$db->query(
+		'CREATE TABLE IF NOT EXISTS vigilance_bulletin_texte (
+			base VARCHAR(30) NOT NULL,
+			bulletin_id INT NOT NULL,
+			contenu MEDIUMBLOB NOT NULL,
+			niveau_max TINYINT NULL,
+			fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (base, bulletin_id)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+	);
+	$db->query(
+		'CREATE TABLE IF NOT EXISTS vigilance_bulletin_dept (
+			base VARCHAR(30) NOT NULL,
+			bulletin_id INT NOT NULL,
+			departement VARCHAR(3) NOT NULL,
+			statut TINYINT NOT NULL,
+			PRIMARY KEY (base, bulletin_id, departement),
+			KEY idx_departement (departement)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+	);
+}
+
 $route = $_GET['route'] ?? '';
 $methode = $_SERVER['REQUEST_METHOD'];
 $db = getDb();
@@ -502,19 +528,100 @@ switch ("$methode:$route") {
 		if ($couleur !== '' && !in_array($couleur, ['2', '3', '4'], true)) repondre(['erreur' => 'couleur invalide'], 400);
 		$phenomene = $_GET['phenomene'] ?? '';
 		if ($phenomene !== '' && !preg_match('/^[1-9]$/', $phenomene)) repondre(['erreur' => 'phenomene invalide (1 a 9)'], 400);
-		$filtreCouleur = $couleur === '' ? 'n.couleur >= 3' : 'n.couleur = ' . (int)$couleur;
+		$departement = $_GET['departement'] ?? '';
+		if ($departement !== '' && !preg_match('/^(\d{2}|2A|2B)$/', $departement)) repondre(['erreur' => 'departement invalide'], 400);
 		$having = $phenomene === '' ? '' : 'HAVING (masque & ' . (1 << ((int)$phenomene - 1)) . ') > 0';
-		$sql = "SELECT n.date, n.couleur, COALESCE(BIT_OR(b.masque), 0) AS masque, COUNT(b.id) AS nbBulletins
-			FROM vigilance_national_jour n LEFT JOIN vigilance_bulletin b ON b.date = n.date
-			WHERE n.date BETWEEN ? AND ? AND $filtreCouleur
-			GROUP BY n.date, n.couleur $having ORDER BY n.date ASC LIMIT 5001";
-		$stmt = $db->prepare($sql);
-		$stmt->bind_param('ss', $debut, $fin);
+		if ($departement === '') {
+			// France entière : couleur nationale du jour + bulletins du jour.
+			$filtreCouleur = $couleur === '' ? 'n.couleur >= 3' : 'n.couleur = ' . (int)$couleur;
+			$sql = "SELECT n.date, n.couleur, COALESCE(BIT_OR(b.masque), 0) AS masque, COUNT(b.id) AS nbBulletins
+				FROM vigilance_national_jour n LEFT JOIN vigilance_bulletin b ON b.date = n.date
+				WHERE n.date BETWEEN ? AND ? AND $filtreCouleur
+				GROUP BY n.date, n.couleur $having ORDER BY n.date ASC LIMIT 5001";
+			$stmt = $db->prepare($sql);
+			$stmt->bind_param('ss', $debut, $fin);
+		} else {
+			// Un département : couleur du département + bulletins qui le citent (nécessite l'import des textes).
+			assurerTablesVigilanceTextes($db);
+			$filtreCouleur = $couleur === '' ? 'dj.couleur >= 3' : 'dj.couleur = ' . (int)$couleur;
+			$sql = "SELECT dj.date, dj.couleur, COALESCE(BIT_OR(b.masque), 0) AS masque, COUNT(DISTINCT b.id) AS nbBulletins
+				FROM vigilance_departement_jour dj
+				LEFT JOIN vigilance_bulletin_dept d ON d.departement = dj.departement
+				LEFT JOIN vigilance_bulletin b ON b.base = d.base AND b.bulletin_id = d.bulletin_id AND b.date = dj.date
+				WHERE dj.departement = ? AND dj.date BETWEEN ? AND ? AND $filtreCouleur
+				GROUP BY dj.date, dj.couleur $having ORDER BY dj.date ASC LIMIT 5001";
+			$stmt = $db->prepare($sql);
+			$stmt->bind_param('sss', $departement, $debut, $fin);
+		}
 		$stmt->execute();
 		$lignes = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 		$tronque = count($lignes) > 5000;
 		if ($tronque) array_pop($lignes);
 		repondre(['jours' => $lignes, 'tronque' => $tronque]);
+
+	// Bulletins listés mais dont le texte n'a pas encore été récupéré (reprise possible de l'import).
+	case 'GET:vigilance/bulletins-a-recuperer':
+		assurerTablesVigilanceTextes($db);
+		$limite = max(1, min((int)($_GET['limite'] ?? 200), 1000));
+		$res = $db->query(
+			"SELECT b.base, b.bulletin_id AS bulletinId FROM vigilance_bulletin b
+			 LEFT JOIN vigilance_bulletin_texte t ON t.base = b.base AND t.bulletin_id = b.bulletin_id
+			 WHERE t.bulletin_id IS NULL ORDER BY b.date ASC, b.id ASC LIMIT $limite"
+		);
+		$reste = $db->query(
+			'SELECT COUNT(*) AS n FROM vigilance_bulletin b
+			 LEFT JOIN vigilance_bulletin_texte t ON t.base = b.base AND t.bulletin_id = b.bulletin_id WHERE t.bulletin_id IS NULL'
+		)->fetch_assoc();
+		repondre(['bulletins' => $res->fetch_all(MYSQLI_ASSOC), 'restant' => (int)$reste['n']]);
+
+	case 'POST:vigilance/bulletins-textes':
+		assurerTablesVigilanceTextes($db);
+		$d = corpsJson();
+		$compte = 0;
+		$texteStmt = $db->prepare(
+			'INSERT INTO vigilance_bulletin_texte (base, bulletin_id, contenu, niveau_max) VALUES (?, ?, COMPRESS(?), ?)
+			 ON DUPLICATE KEY UPDATE contenu=VALUES(contenu), niveau_max=VALUES(niveau_max), fetched_at=CURRENT_TIMESTAMP'
+		);
+		$supprStmt = $db->prepare('DELETE FROM vigilance_bulletin_dept WHERE base = ? AND bulletin_id = ?');
+		$deptStmt = $db->prepare(
+			'INSERT INTO vigilance_bulletin_dept (base, bulletin_id, departement, statut) VALUES (?, ?, ?, ?)
+			 ON DUPLICATE KEY UPDATE statut=VALUES(statut)'
+		);
+		foreach (($d['textes'] ?? []) as $t) {
+			$niveau = isset($t['niveauMax']) ? (int)$t['niveauMax'] : null;
+			$texteStmt->bind_param('sisi', $t['base'], $t['bulletinId'], $t['texte'], $niveau);
+			$texteStmt->execute();
+			$supprStmt->bind_param('si', $t['base'], $t['bulletinId']);
+			$supprStmt->execute();
+			foreach (($t['departements'] ?? []) as $dep) {
+				if (!preg_match('/^(\d{2}|2A|2B)$/', (string)$dep['code'])) continue;
+				$deptStmt->bind_param('sisi', $t['base'], $t['bulletinId'], $dep['code'], $dep['statut']);
+				$deptStmt->execute();
+			}
+			$compte++;
+		}
+		repondre(['ok' => true, 'compte' => $compte]);
+
+	// Un bulletin complet (texte décompressé + départements suivis) pour l'afficher sur le site.
+	case 'GET:vigilance/bulletin':
+		assurerTablesVigilanceTextes($db);
+		$base = $_GET['base'] ?? '';
+		$id = (int)($_GET['id'] ?? 0);
+		if (!preg_match('/^\w{1,30}$/', $base) || $id < 1) repondre(['erreur' => 'base et id requis'], 400);
+		$stmt = $db->prepare(
+			'SELECT b.date, b.heure, b.producteur, b.phenomenes, b.masque, UNCOMPRESS(t.contenu) AS texte, t.niveau_max AS niveauMax
+			 FROM vigilance_bulletin b LEFT JOIN vigilance_bulletin_texte t ON t.base = b.base AND t.bulletin_id = b.bulletin_id
+			 WHERE b.base = ? AND b.bulletin_id = ?'
+		);
+		$stmt->bind_param('si', $base, $id);
+		$stmt->execute();
+		$b = $stmt->get_result()->fetch_assoc();
+		if (!$b) repondre(['erreur' => 'bulletin inconnu'], 404);
+		$stmt = $db->prepare('SELECT departement AS code, statut FROM vigilance_bulletin_dept WHERE base = ? AND bulletin_id = ? ORDER BY departement');
+		$stmt->bind_param('si', $base, $id);
+		$stmt->execute();
+		$b['departements'] = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+		repondre($b);
 
 	// ---- Journal des tâches ----
 	case 'GET:sync-logs':

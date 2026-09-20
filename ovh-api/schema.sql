@@ -133,3 +133,23 @@ CREATE TABLE IF NOT EXISTS vigilance_bulletin (
   UNIQUE KEY uniq_base_bulletin (base, bulletin_id),
   KEY idx_date_masque (date, masque)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Texte intégral des bulletins (compressé avec COMPRESS()) et départements suivis. Référence uniquement :
+-- tables créées automatiquement par l'API (assurerTablesVigilanceTextes). statut : 1 début de suivi, 2 maintien, 3 fin.
+CREATE TABLE IF NOT EXISTS vigilance_bulletin_texte (
+  base VARCHAR(30) NOT NULL,
+  bulletin_id INT NOT NULL,
+  contenu MEDIUMBLOB NOT NULL,
+  niveau_max TINYINT NULL,
+  fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (base, bulletin_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS vigilance_bulletin_dept (
+  base VARCHAR(30) NOT NULL,
+  bulletin_id INT NOT NULL,
+  departement VARCHAR(3) NOT NULL,
+  statut TINYINT NOT NULL,
+  PRIMARY KEY (base, bulletin_id, departement),
+  KEY idx_departement (departement)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

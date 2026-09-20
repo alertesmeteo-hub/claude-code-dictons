@@ -125,9 +125,31 @@ export interface VigilanceRechercheJourApi {
   nbBulletins: number;
 }
 
+export interface VigilanceBulletinTexteApi {
+  base: string;
+  bulletinId: number;
+  texte: string;
+  niveauMax: 2 | 3 | 4 | null;
+  /** statut : 1 début de suivi, 2 maintien, 3 fin. */
+  departements: { code: string; statut: 1 | 2 | 3 }[];
+}
+
+export interface VigilanceBulletinCompletApi {
+  date: string;
+  heure: string;
+  producteur: string;
+  phenomenes: string;
+  masque: number;
+  texte: string | null;
+  niveauMax: number | null;
+  departements: { code: string; statut: number }[];
+}
+
 export interface VigilanceRechercheParams {
   debut: string;
   fin: string;
+  /** '' = France entière ; sinon code département (01…95, 2A, 2B). */
+  departement?: string;
   /** '' = orange et rouge ; '2' jaune, '3' orange, '4' rouge. */
   couleur?: '' | '2' | '3' | '4';
   /** '' = tous ; '1' à '9' = un phénomène. */
@@ -209,8 +231,17 @@ export const ovhApi = {
 
   vigilanceRecherche: (p: VigilanceRechercheParams) =>
     appelerApi<{ jours: VigilanceRechercheJourApi[]; tronque: boolean }>(
-      `vigilance/recherche&debut=${p.debut}&fin=${p.fin}&couleur=${p.couleur ?? ''}&phenomene=${p.phenomene ?? ''}`,
+      `vigilance/recherche&debut=${p.debut}&fin=${p.fin}&couleur=${p.couleur ?? ''}&phenomene=${p.phenomene ?? ''}&departement=${p.departement ?? ''}`,
     ),
+
+  vigilanceBulletinsARecuperer: (limite = 200) =>
+    appelerApi<{ bulletins: { base: string; bulletinId: number }[]; restant: number }>(`vigilance/bulletins-a-recuperer&limite=${limite}`),
+
+  vigilanceBulletinsTextesEnregistrer: (textes: VigilanceBulletinTexteApi[]) =>
+    appelerApi<{ ok: true; compte: number }>('vigilance/bulletins-textes', { method: 'POST', body: JSON.stringify({ textes }) }),
+
+  vigilanceBulletin: (base: string, id: number) =>
+    appelerApi<VigilanceBulletinCompletApi>(`vigilance/bulletin&base=${base}&id=${id}`),
 
   syncLogsListe: (limite = 20) => appelerApi<SyncLogApi[]>(`sync-logs&limite=${limite}`),
 
