@@ -28,6 +28,7 @@ Implémenté (site en production sur un VPS OVH, voir « Déploiement ») :
 - **Vacances scolaires** `/vacances-scolaires` : zones A, B, C, données officielles (data.education.gouv.fr).
 - **Jours fériés** `/jours-feries` et `/jours-feries/YYYY`.
 - **Températures extrêmes** : script `cron-extremes-meteo.ts` (Météo-France) + route publique + plugin WordPress `[temperatures_extremes_france]`.
+- **Archivage des bulletins de vigilance** : script `cron-vigilance-meteo.ts` (Météo-France) — carte des couleurs par département (échéances J et J+1) et texte de synthèse national, archivés quotidiennement en base.
 - Calculs déterministes 100 % locaux, testés (Vitest) : jour de l'année, semaine ISO, zodiaque, astrologie chinoise, calendrier républicain, Pâques et jours fériés, lever/coucher du soleil (NOAA), phases de la Lune et distance Terre-Lune (Meeus ch. 47 et 49), équinoxes et solstices (Meeus ch. 27), fêtes populaires (dates calculées).
 - Météo géolocalisée via Open-Meteo (gratuit, sans clé), avec repli sur recherche manuelle de commune.
 - API PHP intermédiaire (`ovh-api/`) + client TypeScript (`lib/db/ovh-api-client.ts`).
@@ -105,6 +106,12 @@ Sources utilisées (API Météo-France, portail https://portail-api.meteofrance.
 
 Un passage = ~95 appels espacés de 1,5 s (2-3 minutes). Le script garde les 15 stations les plus chaudes (maxima) et les 15 les plus froides (minima) sous 500 m d'altitude, et échoue s'il y a plus de 20 % de départements en erreur.
 
+`npm run cron:vigilance-meteo` : archive le bulletin de vigilance courant (toutes les heures via GitHub Actions). Source (API Météo-France, même clé `METEOFRANCE_API_KEY`, souscription « DonneesPubliquesVigilance ») :
+- **DPVigilance v1** `/cartevigilance/encours` : couleur maximale par département (1 vert → 4 rouge), échéances J et J+1 ;
+- **DPVigilance v1** `/textesvigilance/encours?domain=FRA` : bulletin de synthèse national, archivé tel quel (le format exact renvoyé par l'API n'étant pas garanti, il n'est pas interprété).
+
+Une entrée par (date, échéance, département) est conservée (mise à jour si le passage suivant change la couleur), plus le dernier texte de synthèse du jour.
+
 GitHub Actions (`.github/workflows/cron-jobs.yml`) reste disponible ; secrets nécessaires : `OVH_API_URL`, `OVH_API_TOKEN`, `METEOFRANCE_API_KEY`.
 
 ## Routes du site
@@ -146,6 +153,8 @@ Toutes les routes nécessitent l'en-tête `Authorization: Bearer <DICTON_API_TOK
 | `?route=villes/recherche&q=` | GET | Recherche de commune |
 | `?route=extremes/france` | GET | Températures extrêmes du jour |
 | `?route=extremes/france` | POST | Enregistrer des mesures (`{mesures: [...]}`) |
+| `?route=vigilance/france` | GET | Bulletin de vigilance archivé du jour (carte + texte) |
+| `?route=vigilance/france` | POST | Enregistrer un bulletin (`{carte: [...], texte}`) |
 | `?route=sync-logs&limite=` | GET | Derniers logs de tâches |
 | `?route=sync-logs` | POST | Ajouter un log |
 | `?route=pages-jour` | POST | Traçabilité génération du jour |

@@ -299,6 +299,44 @@ switch ("$methode:$route") {
 		}
 		repondre(['ok' => true, 'compte' => $compte]);
 
+	// ---- Vigilance météo (carte par département + texte de synthèse national) ----
+	case 'GET:vigilance/france':
+		$aujourdHui = date('Y-m-d');
+		$stmt = $db->prepare('SELECT echeance, departement, couleur FROM vigilance_carte WHERE date = ? ORDER BY echeance ASC, departement ASC');
+		$stmt->bind_param('s', $aujourdHui);
+		$stmt->execute();
+		$carte = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+		$stmt = $db->prepare('SELECT contenu, fetched_at FROM vigilance_textes WHERE date = ? LIMIT 1');
+		$stmt->bind_param('s', $aujourdHui);
+		$stmt->execute();
+		$texte = $stmt->get_result()->fetch_assoc();
+
+		repondre(['date' => $aujourdHui, 'carte' => $carte, 'texte' => $texte ?: null]);
+
+	case 'POST:vigilance/france':
+		$d = corpsJson();
+		$aujourdHui = date('Y-m-d');
+		$compte = 0;
+		$stmt = $db->prepare(
+			'INSERT INTO vigilance_carte (date, echeance, departement, couleur) VALUES (?, ?, ?, ?)
+			 ON DUPLICATE KEY UPDATE couleur=VALUES(couleur), fetched_at=CURRENT_TIMESTAMP'
+		);
+		foreach (($d['carte'] ?? []) as $c) {
+			$stmt->bind_param('sssi', $aujourdHui, $c['echeance'], $c['departement'], $c['couleur']);
+			$stmt->execute();
+			$compte++;
+		}
+		if (!empty($d['texte'])) {
+			$stmt = $db->prepare(
+				'INSERT INTO vigilance_textes (date, contenu) VALUES (?, ?)
+				 ON DUPLICATE KEY UPDATE contenu=VALUES(contenu), fetched_at=CURRENT_TIMESTAMP'
+			);
+			$stmt->bind_param('ss', $aujourdHui, $d['texte']);
+			$stmt->execute();
+		}
+		repondre(['ok' => true, 'compte' => $compte]);
+
 	// ---- Journal des tâches ----
 	case 'GET:sync-logs':
 		$limite = min((int)($_GET['limite'] ?? 20), 200);
