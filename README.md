@@ -28,7 +28,7 @@ Implémenté (site en production sur un VPS OVH, voir « Déploiement ») :
 - **Vacances scolaires** `/vacances-scolaires` : zones A, B, C, données officielles (data.education.gouv.fr).
 - **Jours fériés** `/jours-feries` et `/jours-feries/YYYY`.
 - **Températures extrêmes** : script `cron-extremes-meteo.ts` (Météo-France) + route publique + plugin WordPress `[temperatures_extremes_france]`.
-- **Archivage des bulletins de vigilance** : script `cron-vigilance-meteo.ts` (Météo-France) — carte des couleurs par département (échéances J et J+1) et texte de synthèse national, archivés quotidiennement en base.
+- **Archives de vigilance** : script `cron-vigilance-meteo.ts` (Météo-France) — carte des couleurs par département (échéances J et J+1) et texte de synthèse national, archivés quotidiennement en base.
 - Calculs déterministes 100 % locaux, testés (Vitest) : jour de l'année, semaine ISO, zodiaque, astrologie chinoise, calendrier républicain, Pâques et jours fériés, lever/coucher du soleil (NOAA), phases de la Lune et distance Terre-Lune (Meeus ch. 47 et 49), équinoxes et solstices (Meeus ch. 27), fêtes populaires (dates calculées).
 - Météo géolocalisée via Open-Meteo (gratuit, sans clé), avec repli sur recherche manuelle de commune.
 - API PHP intermédiaire (`ovh-api/`) + client TypeScript (`lib/db/ovh-api-client.ts`).
