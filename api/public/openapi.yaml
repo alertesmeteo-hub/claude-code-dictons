@@ -1,0 +1,101 @@
+openapi: 3.0.3
+info:
+  title: API Alertes-Meteo
+  version: 1.0.0
+  description: API meteo francaise simple a integrer. Version MVP gratuite.
+servers:
+  - url: https://api.alertes-meteo.com
+components:
+  securitySchemes:
+    ApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+paths:
+  /v1/health:
+    get:
+      summary: Etat du service
+      responses:
+        '200': { description: OK }
+  /v1/keys/requests:
+    post:
+      summary: Demander une cle API (validation manuelle, cle envoyee par email)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, usage, consent]
+              properties:
+                name: { type: string, maxLength: 100 }
+                organization: { type: string, maxLength: 100 }
+                email: { type: string, format: email }
+                website: { type: string, format: uri }
+                usage: { type: string, minLength: 20, maxLength: 2000, description: 'Projet, zones et frequence prevue' }
+                consent: { type: boolean, description: 'Accord pour traiter ces informations uniquement pour la demande' }
+      responses:
+        '202': { description: Demande recue }
+        '422': { description: Champ invalide }
+        '429': { description: Trop de demandes }
+  /v1/keys:
+    delete:
+      summary: Revoquer la cle utilisee pour l'appel
+      security: [{ ApiKey: [] }]
+      responses:
+        '200': { description: Cle revoquee }
+  /v1/usage:
+    get:
+      summary: Consommation de la cle (par jour et par endpoint, plus mois en cours)
+      security: [{ ApiKey: [] }]
+      responses:
+        '200': { description: OK }
+  /v1/extremes/france:
+    get:
+      summary: Temperatures maximale et minimale du jour parmi les stations collectees
+      description: Source Meteo-France, retraitee. Extremes du jour, pas des records officiels. `meta.coverage` indique la completude.
+      security: [{ ApiKey: [] }]
+      parameters:
+        - { name: altitude_max, in: query, required: false, description: 'Altitude maximale des stations (m)', schema: { type: integer, minimum: 0, maximum: 5000 } }
+        - { name: stations, in: query, required: false, description: 'Reseau principal ou toutes', schema: { type: string, enum: [toutes, principales], default: toutes } }
+      responses:
+        '200': { description: OK }
+        '422': { description: Parametre invalide }
+        '503': { description: Aucune donnee recente }
+  /v1/vigilance:
+    get:
+      summary: Vigilances par departement et phenomene (aujourd'hui et demain)
+      description: Service non officiel, a titre informatif. `meta.stale` indique un retard de mise a jour.
+      security: [{ ApiKey: [] }]
+      parameters:
+        - { name: domain, in: query, required: false, description: 'Departement (30, 2A) ou zone cotiere (3010)', schema: { type: string, pattern: '^(\d{2}|2[AB])(10)?$' } }
+        - { name: echeance, in: query, required: false, schema: { type: string, enum: [J, J1] } }
+        - { name: min_level, in: query, required: false, description: '1 vert a 4 rouge', schema: { type: integer, minimum: 1, maximum: 4, default: 2 } }
+      responses:
+        '200': { description: OK }
+        '422': { description: Parametre invalide }
+        '503': { description: Aucune donnee disponible }
+  /v1/sun:
+    get:
+      summary: Lever, coucher, midi solaire, aube et crepuscule
+      description: Calcul local (algorithme NOAA). Aucune donnee tierce.
+      security: [{ ApiKey: [] }]
+      parameters:
+        - { name: lat, in: query, required: true, schema: { type: number, minimum: -90, maximum: 90 } }
+        - { name: lon, in: query, required: true, schema: { type: number, minimum: -180, maximum: 180 } }
+        - { name: date, in: query, required: false, description: 'YYYY-MM-DD, defaut aujourd''hui (UTC)', schema: { type: string, format: date } }
+        - { name: tz, in: query, required: false, description: 'Fuseau IANA, defaut Europe/Paris', schema: { type: string, default: Europe/Paris } }
+      responses:
+        '200': { description: OK }
+        '401': { description: Cle absente ou invalide }
+        '422': { description: Parametre invalide }
+        '429': { description: Quota depasse }
