@@ -5,6 +5,8 @@ info:
   description: |
     API meteo francaise simple a integrer. Version MVP gratuite.
 
+    Attribution : chaque reponse contient `meta.attribution` (`text`, `url`). Merci de l'afficher sous forme de lien vers https://www.alertes-meteo.com pres des donnees affichees.
+
     Source : Meteo-France. Les endpoints extremes, vigilance, records et rain reposent sur des informations creees a partir de donnees de Meteo-France (Licence Ouverte Etalab), retraitees par Alertes-Meteo. Service non officiel, non valide par Meteo-France. L'endpoint sun est calcule localement.
 servers:
   - url: https://api.alertes-meteo.com
