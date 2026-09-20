@@ -47,8 +47,10 @@ function sousDossiers(page: string): string[] {
   if (essaiJson) return essaiJson;
 
   const trouves = new Set<string>();
-  for (const m of page.matchAll(/href="([^"?#]+)\/?"/g)) {
-    const nom = m[1].replace(/^.*\//, '').replace(/\/$/, '');
+  for (const m of page.matchAll(/href="([^"?#]+)"/g)) {
+    // Les liens sont des chemins absolus se terminant par « / » (ex: .../2022/11/28/050019/) :
+    // retirer le slash final avant d'extraire le dernier segment, sinon il ne reste rien.
+    const nom = m[1].replace(/\/$/, '').replace(/^.*\//, '');
     if (/^\d{2,6}$/.test(nom)) trouves.add(nom);
   }
   return [...trouves].sort();
