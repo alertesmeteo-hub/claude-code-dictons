@@ -25,6 +25,7 @@ Importer `schema.sql` (phpMyAdmin > Importer). C'est un schema initial : pas de 
 |---|---|
 | `*/15 * * * *` | `php ~/api/cron/collect_vigilance.php` |
 | `5 * * * *` | `php ~/api/cron/collect_extremes.php` |
+| `*/30 * * * *` | `php ~/api/cron/collect_records.php` |
 Adapter le chemin selon le dossier reel. Le premier passage manuel : lancer les deux commandes en SSH, puis verifier `SELECT * FROM collector_runs ORDER BY id DESC LIMIT 5;`.
 
 ## 7. Premiere cle

@@ -100,3 +100,31 @@ CREATE TABLE vigilance_items (
   KEY idx_domain (domain_id, echeance),
   KEY idx_color (color_id)
 ) ENGINE=InnoDB;
+
+-- Records de temperature calcules (cron/collect_records.php) : jamais des records officiels
+CREATE TABLE records_snapshot (
+  id TINYINT UNSIGNED PRIMARY KEY,
+  day DATE NOT NULL,
+  generated_at DATETIME NOT NULL,          -- UTC, generation du fichier source
+  latest_observation_at DATETIME NULL,     -- UTC
+  departments_ok SMALLINT NOT NULL,
+  departments_total SMALLINT NOT NULL,
+  fetched_at DATETIME NOT NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE records_events (
+  kind ENUM('heat','cold','tropical') NOT NULL,
+  station_id CHAR(8) NOT NULL,
+  name VARCHAR(80) NOT NULL,
+  department CHAR(2) NOT NULL,
+  region VARCHAR(60) NULL,
+  altitude_m SMALLINT NULL,
+  value DECIMAL(4,1) NOT NULL,             -- degres C
+  is_absolute TINYINT(1) NOT NULL,
+  is_monthly TINYINT(1) NOT NULL,
+  is_fortnight TINYINT(1) NOT NULL,
+  is_daily TINYINT(1) NOT NULL,
+  refs TEXT NOT NULL,                      -- JSON : record precedent par portee (valeur, date)
+  PRIMARY KEY (kind, station_id),
+  KEY idx_dep (department)
+) ENGINE=InnoDB;
