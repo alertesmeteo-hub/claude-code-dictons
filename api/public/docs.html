@@ -96,6 +96,19 @@ print(r.json())</pre>
 <pre>curl "https://api.alertes-meteo.com/v1/records?kind=heat&amp;scope=absolute&amp;limit=10" -H "X-API-Key: VOTRE_CLE"</pre>
 <p>Chaque element donne la station, la temperature en °C, les portees battues (<code>scopes_beaten</code>) et le record precedent avec sa date (<code>previous_records</code>). <code>meta.coverage</code> indique combien de departements ont un historique ; s'il est incomplet, des records peuvent manquer. <strong>Actualisation :</strong> toutes les 30 minutes environ.</p>
 
+<h2>6. GET /v1/rain</h2>
+<p>Pluie observee par station en metropole : derniere heure, 24 h, 48 h, 72 h glissantes, mois, saison et annee en cours, avec les normales 1991-2020 quand elles existent. Cumuls provisoires.</p>
+<table border="1" cellpadding="6" style="border-collapse:collapse">
+<tr><th>Parametre</th><th>Requis</th><th>Description</th></tr>
+<tr><td>sort</td><td>non</td><td>Tri decroissant : <code>rr1</code>, <code>rr24</code> (defaut), <code>rr48</code>, <code>rr72</code>, <code>month</code>, <code>season</code>, <code>year</code></td></tr>
+<tr><td>department</td><td>non</td><td>Departement (<code>30</code>). La Corse est regroupee sous <code>20</code> pour ce jeu de donnees.</td></tr>
+<tr><td>station</td><td>non</td><td>Identifiant de station (8 caracteres)</td></tr>
+<tr><td>complete_only</td><td>non</td><td><code>1</code> pour ne garder que les cumuls complets</td></tr>
+<tr><td>limit / offset</td><td>non</td><td>Pagination, 50 par defaut, 200 maximum</td></tr>
+</table>
+<pre>curl "https://api.alertes-meteo.com/v1/rain?sort=rr24&amp;department=30&amp;complete_only=1" -H "X-API-Key: VOTRE_CLE"</pre>
+<p>Chaque cumul indique <code>complete</code> et, pour 24/48/72 h, <code>hours_covered</code> : un cumul <code>complete: false</code> couvre moins d'heures que la periode annoncee, ne le presentez pas comme complet. <strong>Actualisation :</strong> toutes les 20 minutes environ.</p>
+
 <h2>Autres endpoints</h2>
 <ul>
 <li><code>GET /v1/usage</code> : votre consommation.</li>
