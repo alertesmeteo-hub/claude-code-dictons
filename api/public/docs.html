@@ -83,7 +83,7 @@ print(r.json())</pre>
     "phenomena": [ { "phenomenon_id": 3, "phenomenon": "orages", "level": 3, "color": "orange",
       "begin": "2026-09-20T04:00:00+00:00", "end": "2026-09-20T22:00:00+00:00" } ] } ] } ] },
   "meta": { "source": "...", "product_at": "...", "updated_at": "...", "stale": false } }</pre>
-<p>Une liste <code>periods</code> vide signifie qu'aucune vigilance ne depasse <code>min_level</code>. <code>meta.product_at</code> est la date du produit source, <code>meta.updated_at</code> la derniere verification, et <code>meta.stale</code> passe a <code>true</code> si elle date de plus de 45 minutes. <strong>Actualisation :</strong> verification toutes les 15 minutes.</p>
+<p>Une liste <code>periods</code> vide signifie qu'aucune vigilance ne depasse <code>min_level</code>. <code>meta.product_at</code> est la date du produit source, <code>meta.updated_at</code> la derniere verification, et <code>meta.stale</code> passe a <code>true</code> si elle date de plus de 90 minutes. <strong>Actualisation :</strong> verification toutes les heures.</p>
 
 <h2>5. GET /v1/records</h2>
 <p>Records de temperature du jour, <strong>calcules</strong> par comparaison a l'historique de chaque station. Ils sont provisoires et non officiels : ne les presentez pas comme des records de France.</p>
@@ -95,7 +95,7 @@ print(r.json())</pre>
 <tr><td>limit / offset</td><td>non</td><td>Pagination, 50 par defaut, 200 maximum</td></tr>
 </table>
 <pre>curl "https://api.alertes-meteo.com/v1/records?kind=heat&amp;scope=absolute&amp;limit=10" -H "X-API-Key: VOTRE_CLE"</pre>
-<p>Chaque element donne la station, la temperature en °C, les portees battues (<code>scopes_beaten</code>) et le record precedent avec sa date (<code>previous_records</code>). <code>meta.coverage</code> indique combien de departements ont un historique ; s'il est incomplet, des records peuvent manquer. <strong>Actualisation :</strong> toutes les 30 minutes environ.</p>
+<p>Chaque element donne la station, la temperature en °C, les portees battues (<code>scopes_beaten</code>) et le record precedent avec sa date (<code>previous_records</code>). <code>meta.coverage</code> indique combien de departements ont un historique ; s'il est incomplet, des records peuvent manquer. <strong>Actualisation :</strong> toutes les heures environ.</p>
 
 <h2>6. GET /v1/rain</h2>
 <p>Pluie observee par station en metropole : derniere heure, 24 h, 48 h, 72 h glissantes, mois, saison et annee en cours, avec les normales 1991-2020 quand elles existent. Cumuls provisoires.</p>
@@ -108,7 +108,7 @@ print(r.json())</pre>
 <tr><td>limit / offset</td><td>non</td><td>Pagination, 50 par defaut, 200 maximum</td></tr>
 </table>
 <pre>curl "https://api.alertes-meteo.com/v1/rain?sort=rr24&amp;department=30&amp;complete_only=1" -H "X-API-Key: VOTRE_CLE"</pre>
-<p>Chaque cumul indique <code>complete</code> et, pour 24/48/72 h, <code>hours_covered</code> : un cumul <code>complete: false</code> couvre moins d'heures que la periode annoncee, ne le presentez pas comme complet. <strong>Actualisation :</strong> toutes les 20 minutes environ.</p>
+<p>Chaque cumul indique <code>complete</code> et, pour 24/48/72 h, <code>hours_covered</code> : un cumul <code>complete: false</code> couvre moins d'heures que la periode annoncee, ne le presentez pas comme complet. <strong>Actualisation :</strong> toutes les heures environ ; <code>meta.stale</code> passe a <code>true</code> apres 2 heures sans mise a jour.</p>
 
 <h2>Autres endpoints</h2>
 <ul>

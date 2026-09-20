@@ -24,10 +24,11 @@ Aucun SQL a coller : les tables sont creees automatiquement au premier appel (AP
 ## 6. Crons (Hebergement > Taches CRON)
 | Frequence | Commande |
 |---|---|
-| `*/15 * * * *` | `php ~/api/cron/collect_vigilance.php` |
-| `5 * * * *` | `php ~/api/cron/collect_extremes.php` |
-| `*/30 * * * *` | `php ~/api/cron/collect_records.php` |
-| `*/20 * * * *` | `php ~/api/cron/collect_rain.php` |
+| toutes les heures | `php ~/api/cron/collect_vigilance.php` |
+| toutes les heures | `php ~/api/cron/collect_rain.php` |
+| toutes les heures | `php ~/api/cron/collect_records.php` |
+| toutes les heures | `php ~/api/cron/collect_extremes.php` |
+Sur le mutualise OVH (formulaire « Ajouter une planification »), les minutes sont ignorees : la frequence minimale est **une fois par heure**. Les seuils `stale` de l'API en tiennent compte (vigilance 90 min, pluie 2 h, records et extremes 3 h). Pour une frequence plus fine, il faudra un VPS ou un declencheur externe.
 Adapter le chemin selon le dossier reel. Le premier passage manuel : lancer les deux commandes en SSH, puis verifier `SELECT * FROM am_collector_runs ORDER BY id DESC LIMIT 5;`.
 
 ## 7. Premiere cle
