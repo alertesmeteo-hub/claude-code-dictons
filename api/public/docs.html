@@ -116,8 +116,13 @@ print(r.json())</pre>
 <li><code>GET /v1/health</code> : etat du service.</li>
 </ul>
 
+<h2>Sources et licences</h2>
+<p><strong>Source : Meteo-France.</strong> Les endpoints <code>extremes/france</code>, <code>vigilance</code>, <code>records</code> et <code>rain</code> reposent sur des informations creees a partir de donnees de Meteo-France, reutilisees sous Licence Ouverte Etalab. Alertes-Meteo les retraite (agregation, calculs, mise en cache) : elles ne sont ni officielles ni validees par Meteo-France. Pour la vigilance officielle, consultez vigilance.meteofrance.fr. L'endpoint <code>sun</code> est calcule localement, sans donnee externe.</p>
+
 <h2>Erreurs</h2>
 <p>Format : <code>{"error":{"code":"...","message":"..."}}</code>. Codes : 401 cle invalide, 403 compte suspendu, 404 inconnu, 422 parametre invalide, 429 quota (voir <code>Retry-After</code> et <code>X-RateLimit-*</code>), 503 indisponible.</p>
 <p>Offre gratuite : 30 requetes/minute, 10 000/mois.</p>
+<hr>
+<p><small>Source : Meteo-France (donnees retraitees par Alertes-Meteo, service non officiel).</small></p>
 </body>
 </html>
