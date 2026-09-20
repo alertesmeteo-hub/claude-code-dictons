@@ -19,6 +19,7 @@
     m.hidden = !text;
     m.className = 'msg ' + (ok ? 'ok' : 'err');
     m.textContent = text || '';
+    if (text) { window.scrollTo(0, 0); }
   }
 
   function el(tag, text, cls) {
@@ -32,6 +33,17 @@
     var b = el('button', text, 'btn' + (secondary === false ? '' : ' secondary'));
     b.type = 'button';
     b.addEventListener('click', fn);
+    return b;
+  }
+
+  function confirmBtn(text, fn) {
+    var b = btn(text, function () {
+      if (b.dataset.armed === '1') { b.dataset.armed = ''; fn(); return; }
+      b.dataset.armed = '1';
+      b.textContent = 'Confirmer ?';
+      b.className = 'btn';
+      setTimeout(function () { b.dataset.armed = ''; b.textContent = text; b.className = 'btn secondary'; }, 5000);
+    });
     return b;
   }
 
@@ -62,14 +74,10 @@
     var pill = el('span', off ? 'Désactivé' : 'Actif', 'pill ' + (off ? 'bad' : 'ok'));
     wrap.appendChild(pill);
     wrap.appendChild(document.createTextNode(' '));
-    wrap.appendChild(btn(off ? 'Réactiver' : 'Désactiver', function () {
-      var reason = null;
-      if (!off) {
-        reason = window.prompt('Motif (facultatif) :', '') || null;
-        if (!window.confirm('Désactiver « ' + name + ' » ?')) { return; }
-      }
-      action('/v1/admin/switches', { name: name, disabled: !off, reason: reason }, name + ' : ' + (off ? 'réactivé.' : 'désactivé.'));
-    }));
+    var doSwitch = function () {
+      action('/v1/admin/switches', { name: name, disabled: !off, reason: off ? null : 'désactivé depuis l\'administration' }, name + ' : ' + (off ? 'réactivé.' : 'désactivé.'));
+    };
+    wrap.appendChild(off ? btn('Réactiver', doSwitch) : confirmBtn('Désactiver', doSwitch));
     return wrap;
   }
 
@@ -123,7 +131,7 @@
       c.appendChild(el('p', r.usage_description));
       var a = el('div', null, 'actions');
       a.appendChild(btn('Approuver', function () { action('/v1/admin/requests/' + r.id + '/approve', null, 'Demande approuvée.'); }, false));
-      a.appendChild(btn('Rejeter', function () { if (window.confirm('Rejeter cette demande ?')) { action('/v1/admin/requests/' + r.id + '/reject', null, 'Demande rejetée.'); } }));
+      a.appendChild(confirmBtn('Rejeter', function () { action('/v1/admin/requests/' + r.id + '/reject', null, 'Demande rejetée.'); }));
       c.appendChild(a);
       box.appendChild(c);
     });
@@ -142,13 +150,12 @@
       tr.appendChild(td(Number(k.month_hits).toLocaleString('fr-FR')));
       var cell = document.createElement('td');
       if (!revoked) {
-        cell.appendChild(btn('Révoquer', function () { if (window.confirm('Révoquer la clé ' + k.prefix + ' ?')) { action('/v1/admin/keys/' + k.prefix + '/revoke', null, 'Clé révoquée.'); } }));
+        cell.appendChild(confirmBtn('Révoquer', function () { action('/v1/admin/keys/' + k.prefix + '/revoke', null, 'Clé révoquée.'); }));
         cell.appendChild(document.createTextNode(' '));
       }
       var susp = k.account_status === 'active';
-      cell.appendChild(btn(susp ? 'Suspendre le compte' : 'Réactiver le compte', function () {
-        if (!susp || window.confirm('Suspendre ' + k.email + ' ?')) { action('/v1/admin/accounts', { email: k.email, status: susp ? 'suspended' : 'active' }, susp ? 'Compte suspendu.' : 'Compte réactivé.'); }
-      }));
+      var doAccount = function () { action('/v1/admin/accounts', { email: k.email, status: susp ? 'suspended' : 'active' }, susp ? 'Compte suspendu.' : 'Compte réactivé.'); };
+      cell.appendChild(susp ? confirmBtn('Suspendre le compte', doAccount) : btn('Réactiver le compte', doAccount));
       tr.appendChild(cell);
       kb.appendChild(tr);
     });
