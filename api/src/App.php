@@ -92,6 +92,13 @@ final class App
 
     public static function ok(array $data, array $meta = []): never
     {
-        self::json(200, ['data' => $data, 'meta' => $meta + ['version' => 'v1', 'units' => 'metric', 'generated_at' => gmdate('c')]]);
+        $meta += ['version' => 'v1', 'units' => 'metric', 'generated_at' => gmdate('c')];
+        // Attribution a afficher par les sites qui reutilisent les donnees (lien vers Alertes-Meteo.com)
+        $fromMeteoFrance = str_contains((string) ($meta['source'] ?? ''), 'Meteo-France');
+        $meta['attribution'] = [
+            'text' => $fromMeteoFrance ? 'Source : Météo-France, données retraitées par Alertes-Meteo.com' : 'Données fournies par Alertes-Meteo.com',
+            'url' => 'https://www.alertes-meteo.com',
+        ];
+        self::json(200, ['data' => $data, 'meta' => $meta]);
     }
 }
