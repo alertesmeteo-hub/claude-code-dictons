@@ -4,6 +4,7 @@ declare(strict_types=1);
 require __DIR__ . '/../src/App.php';
 require __DIR__ . '/../src/Auth.php';
 require __DIR__ . '/../src/Sun.php';
+require __DIR__ . '/../src/Admin.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 $path = rtrim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?: '/', '/') ?: '/';
@@ -14,6 +15,48 @@ if ($method === 'OPTIONS') {
 try {
     if ($path === '/v1/health') {
         App::ok(['status' => 'ok']);
+    }
+
+    if (str_starts_with($path, '/v1/admin/')) {
+        Admin::guard();
+        $in = json_decode(file_get_contents('php://input'), true) ?: [];
+        if ($path === '/v1/admin/overview' && $method === 'GET') {
+            App::ok(Admin::overview());
+        }
+        if ($path === '/v1/admin/requests' && $method === 'GET') {
+            App::ok(['requests' => Admin::pending()]);
+        }
+        if ($path === '/v1/admin/keys' && $method === 'GET') {
+            App::ok(['keys' => Admin::keys()]);
+        }
+        if (preg_match('#^/v1/admin/requests/(\d+)/(approve|reject)$#', $path, $m) && $method === 'POST') {
+            if ($m[2] === 'approve') {
+                $r = Admin::approve((int) $m[1]);
+                $r ? App::ok($r['emailed'] ? ['email' => $r['email'], 'emailed' => true] : ['email' => $r['email'], 'emailed' => false, 'key' => $r['key']])
+                   : App::error(404, 'not_found', 'Demande introuvable ou deja traitee.');
+            }
+            Admin::reject((int) $m[1]) ? App::ok(['rejected' => true]) : App::error(404, 'not_found', 'Demande introuvable ou deja traitee.');
+        }
+        if (preg_match('#^/v1/admin/keys/([0-9a-f]{8})/revoke$#', $path, $m) && $method === 'POST') {
+            App::ok(['revoked' => Admin::revoke($m[1])]);
+        }
+        if ($path === '/v1/admin/accounts' && $method === 'POST') {
+            $email = strtolower(trim((string) ($in['email'] ?? '')));
+            $status = (string) ($in['status'] ?? '');
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL) || !in_array($status, ['active', 'suspended'], true)) {
+                App::error(422, 'invalid_input', 'email valide et status active|suspended requis.');
+            }
+            App::ok(['updated' => Admin::setAccountStatus($email, $status)]);
+        }
+        if ($path === '/v1/admin/switches' && $method === 'POST') {
+            $name = (string) ($in['name'] ?? '');
+            if (!Admin::validSwitch($name) || !isset($in['disabled'])) {
+                App::error(422, 'invalid_input', 'name inconnu ou disabled manquant.');
+            }
+            Admin::setSwitch($name, (bool) $in['disabled'], isset($in['reason']) ? mb_substr((string) $in['reason'], 0, 190) : null);
+            App::ok(['name' => $name, 'disabled' => (bool) $in['disabled']]);
+        }
+        App::error(404, 'not_found', 'Endpoint admin inconnu.');
     }
 
     if ($path === '/v1/status' && $method === 'GET') {

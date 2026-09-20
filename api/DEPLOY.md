@@ -15,7 +15,7 @@ Deposer le contenu du dossier `api/` dans le dossier racine `api` de l'hebergeme
 Le `.htaccess` bloque `src/`, `tests/`, `schema.sql`, `.env*`. Meilleure option : placer `.env` **au-dessus** de la racine web si le multisite le permet, sinon garder le `.env` a la racine (bloque par `.htaccess`).
 
 ## 4. Configuration
-Copier `.env.example` en `.env` et renseigner : `DB_DSN`, `DB_USER`, `DB_PASS`, `IP_SALT` (chaine aleatoire longue), `METEOFRANCE_API_KEY`, `VIGILANCE_SOURCE_URL`. Permissions : `chmod 600 .env`. Ne jamais versionner `.env`.
+Copier `.env.example` en `.env` et renseigner : `DB_DSN`, `DB_USER`, `DB_PASS`, `IP_SALT` (chaine aleatoire longue), `METEOFRANCE_API_KEY`, `VIGILANCE_SOURCE_URL`, `RECORDS_SOURCE_URL`, `RAIN_SOURCE_URL` et `ADMIN_TOKEN` (32 caracteres minimum ; en generer un avec `php -r "echo bin2hex(random_bytes(24));"`). L'espace d'administration est sur `/admin` ; sans `ADMIN_TOKEN`, il reste desactive. Permissions : `chmod 600 .env`. Ne jamais versionner `.env`.
 
 ## 5. Base de donnees
 Aucun SQL a coller : les tables sont creees automatiquement au premier appel (API ou cron) a partir de `schema.sql`, qui est idempotent (`CREATE TABLE IF NOT EXISTS`) et rejoue quand il change. L'utilisateur MariaDB doit avoir le droit `CREATE`. Limite : les `ALTER` sur des tables existantes ne sont pas automatiques ; les documenter avant tout changement de colonne.

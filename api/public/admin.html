@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Administration | Alertes-Meteo API</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<header class="site"><div class="wrap">
+  <a class="logo" href="/">Alertes-Meteo API</a>
+  <nav aria-label="Administration"><a href="/admin" aria-current="page">Administration</a></nav>
+</div></header>
+
+<main class="wrap">
+  <h1>Administration</h1>
+
+  <section id="login">
+    <form id="loginForm" novalidate>
+      <label for="token">Jeton administrateur</label>
+      <input id="token" type="password" autocomplete="off" spellcheck="false">
+      <div class="actions"><button class="btn" type="submit">Se connecter</button></div>
+    </form>
+  </section>
+  <div id="msg" class="msg" role="status" hidden></div>
+
+  <section id="board" hidden>
+    <div class="actions"><button class="btn secondary" id="refresh" type="button">Actualiser</button> <button class="btn secondary" id="logout" type="button">Se déconnecter</button></div>
+
+    <div class="grid" id="stats"></div>
+
+    <h2>Demandes de clé en attente</h2>
+    <div id="requests"></div>
+
+    <h2>Collecteurs</h2>
+    <table class="data"><thead><tr><th>Collecteur</th><th>Dernier succès</th><th>Dernier passage</th><th>Interrupteur</th></tr></thead><tbody id="collectors"></tbody></table>
+
+    <h2>Endpoints (ce mois)</h2>
+    <table class="data"><thead><tr><th>Endpoint</th><th>Requêtes</th><th>Interrupteur</th></tr></thead><tbody id="endpoints"></tbody></table>
+
+    <h2>Clés</h2>
+    <table class="data"><thead><tr><th>Préfixe</th><th>Email</th><th>Compte</th><th>Expire</th><th>Requêtes (mois)</th><th>Actions</th></tr></thead><tbody id="keys"></tbody></table>
+  </section>
+</main>
+
+<footer class="site"><div class="wrap">Zone réservée. Le jeton n'est conservé que dans cet onglet.</div></footer>
+<script src="/assets/admin.js"></script>
+</body>
+</html>

@@ -61,12 +61,20 @@ final class App
         $pdo->prepare('INSERT INTO schema_meta (id, hash) VALUES (1, ?) ON DUPLICATE KEY UPDATE hash = VALUES(hash)')->execute([$hash]);
     }
 
+    /** Vrai si l'interrupteur d'urgence de ce nom est actif. */
+    public static function switchOff(string $name): bool
+    {
+        $st = self::db()->prepare('SELECT 1 FROM kill_switch WHERE name = ? AND disabled = 1');
+        $st->execute([$name]);
+        return (bool) $st->fetchColumn();
+    }
+
     public static function json(int $status, array $body, array $headers = []): never
     {
         http_response_code($status);
         header('Content-Type: application/json; charset=utf-8');
         header('Access-Control-Allow-Origin: *');
-        header('Access-Control-Allow-Headers: X-API-Key, Content-Type');
+        header('Access-Control-Allow-Headers: X-API-Key, X-Admin-Token, Content-Type');
         header('Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS');
         foreach ($headers as $k => $v) {
             header("$k: $v");
