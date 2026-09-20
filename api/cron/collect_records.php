@@ -19,7 +19,7 @@ if (App::switchOff('collector:records')) {
 
 function logRun(string $status, string $msg, int $ok, int $total): void
 {
-    App::db()->prepare('INSERT INTO collector_runs (name, status, message, departments_ok, departments_total, finished_at) VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP())')
+    App::db()->prepare('INSERT INTO am_collector_runs (name, status, message, departments_ok, departments_total, finished_at) VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP())')
         ->execute(['records', $status, mb_substr($msg, 0, 255), $ok, $total]);
 }
 
@@ -84,21 +84,21 @@ try {
     }
 
     $db = App::db();
-    $cur = $db->query('SELECT generated_at FROM records_snapshot WHERE id = 1')->fetchColumn();
+    $cur = $db->query('SELECT generated_at FROM am_records_snapshot WHERE id = 1')->fetchColumn();
     if ($cur === $generated) {
-        $db->exec('UPDATE records_snapshot SET fetched_at = UTC_TIMESTAMP() WHERE id = 1');
+        $db->exec('UPDATE am_records_snapshot SET fetched_at = UTC_TIMESTAMP() WHERE id = 1');
         logRun('ok', "source inchangee ($generated UTC)", $depOk, $depTotal);
         echo "Source inchangee\n";
         exit(0);
     }
     $db->beginTransaction();
-    $db->exec('DELETE FROM records_events');
-    $ins = $db->prepare('INSERT INTO records_events (kind, station_id, name, department, region, altitude_m, value, is_absolute, is_monthly, is_fortnight, is_daily, refs)
+    $db->exec('DELETE FROM am_records_events');
+    $ins = $db->prepare('INSERT INTO am_records_events (kind, station_id, name, department, region, altitude_m, value, is_absolute, is_monthly, is_fortnight, is_daily, refs)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE value = VALUES(value)');
     foreach ($rows as $r) {
         $ins->execute($r);
     }
-    $db->prepare('INSERT INTO records_snapshot (id, day, generated_at, latest_observation_at, departments_ok, departments_total, fetched_at)
+    $db->prepare('INSERT INTO am_records_snapshot (id, day, generated_at, latest_observation_at, departments_ok, departments_total, fetched_at)
         VALUES (1, ?, ?, ?, ?, ?, UTC_TIMESTAMP()) ON DUPLICATE KEY UPDATE day = VALUES(day), generated_at = VALUES(generated_at),
         latest_observation_at = VALUES(latest_observation_at), departments_ok = VALUES(departments_ok), departments_total = VALUES(departments_total), fetched_at = UTC_TIMESTAMP()')
         ->execute([$doc['day']['date'], $generated, isset($doc['latest_observation_at']) ? utc($doc['latest_observation_at']) : null, $depOk, $depTotal]);

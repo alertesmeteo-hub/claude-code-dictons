@@ -24,7 +24,7 @@ final class Auth
             App::error(401, 'missing_or_invalid_key', 'En-tete X-API-Key absent ou invalide.');
         }
         $st = App::db()->prepare('SELECT k.id, k.key_hash, k.revoked_at, k.expires_at, u.status, p.per_minute, p.per_month
-            FROM api_keys k JOIN users u ON u.id = k.user_id JOIN plans p ON p.code = u.plan WHERE k.prefix = ?');
+            FROM am_api_keys k JOIN am_users u ON u.id = k.user_id JOIN am_plans p ON p.code = u.plan WHERE k.prefix = ?');
         $st->execute([$m[1]]);
         $row = $st->fetch();
         if (!$row || !hash_equals($row['key_hash'], self::hash($key)) || $row['revoked_at'] !== null) {
@@ -43,7 +43,7 @@ final class Auth
         $id = (int) $row['id'];
         $min = 'm' . gmdate('YmdHi');
         $month = 'M' . gmdate('Ym');
-        $q = App::db()->prepare('SELECT bucket, SUM(hits) AS h FROM usage_counters WHERE key_id = ? AND bucket IN (?, ?) GROUP BY bucket');
+        $q = App::db()->prepare('SELECT bucket, SUM(hits) AS h FROM am_usage_counters WHERE key_id = ? AND bucket IN (?, ?) GROUP BY bucket');
         $q->execute([$id, $min, $month]);
         $used = array_column($q->fetchAll(), 'h', 'bucket');
         $usedMin = (int) ($used[$min] ?? 0);
@@ -65,7 +65,7 @@ final class Auth
         }
 
         // minute et mois comptent toutes les requetes ; jour detaille par endpoint
-        $ins = App::db()->prepare('INSERT INTO usage_counters (key_id, bucket, endpoint, hits) VALUES (?, ?, ?, 1)
+        $ins = App::db()->prepare('INSERT INTO am_usage_counters (key_id, bucket, endpoint, hits) VALUES (?, ?, ?, 1)
             ON DUPLICATE KEY UPDATE hits = hits + 1');
         $ins->execute([$id, $min, '*']);
         $ins->execute([$id, $month, '*']);
