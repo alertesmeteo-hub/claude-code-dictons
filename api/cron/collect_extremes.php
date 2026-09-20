@@ -9,6 +9,12 @@ declare(strict_types=1);
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 require __DIR__ . '/../src/App.php';
 
+if (App::switchOff('collector:extremes')) {
+    echo "Collecteur desactive (interrupteur d'urgence)
+";
+    exit(0);
+}
+
 const DPOBS = 'https://public-api.meteofrance.fr/public/DPObs/v1';
 const DPPAQUET = 'https://public-api.meteofrance.fr/public/DPPaquetObs/v1';
 const PAUSE_US = 1_500_000;

@@ -36,6 +36,9 @@ final class Auth
         if ($row['status'] !== 'active') {
             App::error(403, 'account_suspended', 'Compte suspendu.');
         }
+        if (in_array($endpoint, Admin::ENDPOINTS, true) && App::switchOff($endpoint)) {
+            App::error(503, 'endpoint_disabled', 'Endpoint temporairement desactive.');
+        }
 
         $id = (int) $row['id'];
         $min = 'm' . gmdate('YmdHi');

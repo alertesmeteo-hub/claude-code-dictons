@@ -156,3 +156,19 @@ CREATE TABLE IF NOT EXISTS rain_stations (
   rr_year_mean DECIMAL(7,1) NULL,
   KEY idx_dep (department)
 ) ENGINE=InnoDB;
+
+-- Interrupteurs d'urgence : nom d'endpoint (sun, rain...) ou 'collector:<nom>'
+CREATE TABLE IF NOT EXISTS kill_switch (
+  name VARCHAR(40) NOT NULL PRIMARY KEY,
+  disabled TINYINT(1) NOT NULL DEFAULT 0,
+  reason VARCHAR(190) NULL,
+  updated_at DATETIME NOT NULL
+) ENGINE=InnoDB;
+
+-- Echecs d'authentification admin (protection contre la force brute), par IP hachee et par heure
+CREATE TABLE IF NOT EXISTS admin_failures (
+  ip_hash CHAR(64) NOT NULL,
+  hour CHAR(10) NOT NULL,
+  n INT UNSIGNED NOT NULL DEFAULT 0,
+  PRIMARY KEY (ip_hash, hour)
+) ENGINE=InnoDB;

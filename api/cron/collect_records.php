@@ -11,6 +11,12 @@ if (PHP_SAPI !== 'cli') {
 }
 require __DIR__ . '/../src/App.php';
 
+if (App::switchOff('collector:records')) {
+    echo "Collecteur desactive (interrupteur d'urgence)
+";
+    exit(0);
+}
+
 function logRun(string $status, string $msg, int $ok, int $total): void
 {
     App::db()->prepare('INSERT INTO collector_runs (name, status, message, departments_ok, departments_total, finished_at) VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP())')
