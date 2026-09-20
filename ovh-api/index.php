@@ -80,6 +80,32 @@ function assurerTableFetes($db) {
 	);
 }
 
+// Tables créées automatiquement au premier usage (pas de manipulation phpMyAdmin nécessaire).
+function assurerTablesVigilance($db) {
+	$db->query(
+		"CREATE TABLE IF NOT EXISTS vigilance_carte (
+			id INT AUTO_INCREMENT PRIMARY KEY,
+			date DATE NOT NULL,
+			heure TIME NOT NULL,
+			echeance ENUM('J','J1') NOT NULL,
+			departement VARCHAR(10) NOT NULL,
+			couleur TINYINT NOT NULL,
+			fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE KEY uniq_date_heure_echeance_dep (date, heure, echeance, departement)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+	);
+	$db->query(
+		'CREATE TABLE IF NOT EXISTS vigilance_textes (
+			id INT AUTO_INCREMENT PRIMARY KEY,
+			date DATE NOT NULL,
+			heure TIME NOT NULL,
+			contenu MEDIUMTEXT NOT NULL,
+			fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE KEY uniq_date_heure (date, heure)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+	);
+}
+
 $route = $_GET['route'] ?? '';
 $methode = $_SERVER['REQUEST_METHOD'];
 $db = getDb();
@@ -296,6 +322,47 @@ switch ("$methode:$route") {
 			$stmt->bind_param('sisdss', $aujourdHui, $stationId, $m['type'], $m['valeurC'], $m['heureMesure'], $m['source']);
 			$stmt->execute();
 			$compte++;
+		}
+		repondre(['ok' => true, 'compte' => $compte]);
+
+	// ---- Vigilance météo (carte par département + texte de synthèse national) ----
+	// Un jour peut compter plusieurs bulletins (~6h, 16h, réévaluations) : identifiés par (date, heure).
+	case 'GET:vigilance/france':
+		assurerTablesVigilance($db);
+		$aujourdHui = date('Y-m-d');
+		$stmt = $db->prepare('SELECT heure, echeance, departement, couleur FROM vigilance_carte WHERE date = ? ORDER BY heure ASC, echeance ASC, departement ASC');
+		$stmt->bind_param('s', $aujourdHui);
+		$stmt->execute();
+		$carte = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+		$stmt = $db->prepare('SELECT heure, contenu, fetched_at FROM vigilance_textes WHERE date = ? ORDER BY heure ASC');
+		$stmt->bind_param('s', $aujourdHui);
+		$stmt->execute();
+		$textes = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+		repondre(['date' => $aujourdHui, 'carte' => $carte, 'textes' => $textes]);
+
+	case 'POST:vigilance/france':
+		assurerTablesVigilance($db);
+		$d = corpsJson();
+		if (empty($d['date']) || empty($d['heure'])) repondre(['erreur' => 'date et heure requises'], 400);
+		$compte = 0;
+		$stmt = $db->prepare(
+			'INSERT INTO vigilance_carte (date, heure, echeance, departement, couleur) VALUES (?, ?, ?, ?, ?)
+			 ON DUPLICATE KEY UPDATE couleur=VALUES(couleur), fetched_at=CURRENT_TIMESTAMP'
+		);
+		foreach (($d['carte'] ?? []) as $c) {
+			$stmt->bind_param('ssssi', $d['date'], $d['heure'], $c['echeance'], $c['departement'], $c['couleur']);
+			$stmt->execute();
+			$compte++;
+		}
+		if (!empty($d['texte'])) {
+			$stmt = $db->prepare(
+				'INSERT INTO vigilance_textes (date, heure, contenu) VALUES (?, ?, ?)
+				 ON DUPLICATE KEY UPDATE contenu=VALUES(contenu), fetched_at=CURRENT_TIMESTAMP'
+			);
+			$stmt->bind_param('sss', $d['date'], $d['heure'], $d['texte']);
+			$stmt->execute();
 		}
 		repondre(['ok' => true, 'compte' => $compte]);
 

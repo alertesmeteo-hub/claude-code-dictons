@@ -28,6 +28,7 @@ Implémenté (site en production sur un VPS OVH, voir « Déploiement ») :
 - **Vacances scolaires** `/vacances-scolaires` : zones A, B, C, données officielles (data.education.gouv.fr).
 - **Jours fériés** `/jours-feries` et `/jours-feries/YYYY`.
 - **Températures extrêmes** : script `cron-extremes-meteo.ts` (Météo-France) + route publique + plugin WordPress `[temperatures_extremes_france]`.
+- **Archives de vigilance** : script `cron-vigilance-meteo.ts` (Météo-France) — carte des couleurs par département (échéances J et J+1) et texte de synthèse national, archivés quotidiennement en base.
 - Calculs déterministes 100 % locaux, testés (Vitest) : jour de l'année, semaine ISO, zodiaque, astrologie chinoise, calendrier républicain, Pâques et jours fériés, lever/coucher du soleil (NOAA), phases de la Lune et distance Terre-Lune (Meeus ch. 47 et 49), équinoxes et solstices (Meeus ch. 27), fêtes populaires (dates calculées).
 - Météo géolocalisée via Open-Meteo (gratuit, sans clé), avec repli sur recherche manuelle de commune.
 - API PHP intermédiaire (`ovh-api/`) + client TypeScript (`lib/db/ovh-api-client.ts`).
@@ -105,6 +106,14 @@ Sources utilisées (API Météo-France, portail https://portail-api.meteofrance.
 
 Un passage = ~95 appels espacés de 1,5 s (2-3 minutes). Le script garde les 15 stations les plus chaudes (maxima) et les 15 les plus froides (minima) sous 500 m d'altitude, et échoue s'il y a plus de 20 % de départements en erreur.
 
+`npm run cron:vigilance-meteo` : archive le bulletin de vigilance courant (toutes les heures via GitHub Actions). Source (API Météo-France, même clé `METEOFRANCE_API_KEY`, souscription « DonneesPubliquesVigilance ») :
+- **DPVigilance v1** `/cartevigilance/encours` : couleur maximale par département (1 vert → 4 rouge), échéances J et J+1 ;
+- **DPVigilance v1** `/textesvigilance/encours` (sans paramètre `domain`, sinon 404) : bulletin de synthèse national en JSON, archivé tel quel sans être interprété.
+
+Une entrée par (date, heure de bulletin, échéance, département) est conservée : un même jour peut compter plusieurs bulletins (~6h, 16h, réévaluations en cours d'événement), chacun archivé séparément. Les tables `vigilance_carte` et `vigilance_textes` se créent automatiquement au premier appel (comme `fetes_jour`) — pas besoin de passer par phpMyAdmin pour celles-ci.
+
+**Historique (2022 → aujourd'hui)** : `npm run backfill:vigilance -- --depuis=2022-01-01 --jusqu-a=2022-12-31` importe, une fois, l'archive publique [« Vigilance météorologique archivée »](https://www.data.gouv.fr/datasets/vigilance-meteorologique-archivee) (`files.data.gouv.fr/meteofrance/data/vigilance/metropole/AAAA/MM/JJ/HHMMSS/CDP_CARTE_EXTERNE.json`, même format que l'API temps réel). Cette archive ne remonte qu'à **2022** (pas d'historique officiel connu avant, alors que la vigilance existe depuis 2001) et ne contient pas de texte de synthèse (uniquement la carte). Script à lancer manuellement (pas planifié), idempotent, avec pause entre les appels — un backfill complet représente plusieurs milliers de requêtes et peut prendre des heures.
+
 GitHub Actions (`.github/workflows/cron-jobs.yml`) reste disponible ; secrets nécessaires : `OVH_API_URL`, `OVH_API_TOKEN`, `METEOFRANCE_API_KEY`.
 
 ## Routes du site
@@ -146,6 +155,8 @@ Toutes les routes nécessitent l'en-tête `Authorization: Bearer <DICTON_API_TOK
 | `?route=villes/recherche&q=` | GET | Recherche de commune |
 | `?route=extremes/france` | GET | Températures extrêmes du jour |
 | `?route=extremes/france` | POST | Enregistrer des mesures (`{mesures: [...]}`) |
+| `?route=vigilance/france` | GET | Bulletin de vigilance archivé du jour (carte + texte) |
+| `?route=vigilance/france` | POST | Enregistrer un bulletin (`{carte: [...], texte}`) |
 | `?route=sync-logs&limite=` | GET | Derniers logs de tâches |
 | `?route=sync-logs` | POST | Ajouter un log |
 | `?route=pages-jour` | POST | Traçabilité génération du jour |

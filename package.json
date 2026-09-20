@@ -11,6 +11,8 @@
     "seed:fetes": "tsx prisma/seed-fetes.ts",
     "cron:generation-jour": "tsx scripts/cron-generation-jour.ts",
     "cron:extremes-meteo": "tsx scripts/cron-extremes-meteo.ts",
+    "cron:vigilance-meteo": "tsx scripts/cron-vigilance-meteo.ts",
+    "backfill:vigilance": "tsx scripts/backfill-vigilance.ts",
     "test": "vitest run"
   },
   "dependencies": {

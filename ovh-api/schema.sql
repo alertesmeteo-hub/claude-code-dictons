@@ -73,6 +73,26 @@ CREATE TABLE IF NOT EXISTS pages_jour (
   CONSTRAINT fk_page_saint FOREIGN KEY (saint_id) REFERENCES saints(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS vigilance_carte (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  date DATE NOT NULL,
+  heure TIME NOT NULL, -- heure de publication du bulletin (Europe/Paris) : plusieurs bulletins/jour (~6h, 16h, réévaluations)
+  echeance ENUM('J','J1') NOT NULL,
+  departement VARCHAR(10) NOT NULL,
+  couleur TINYINT NOT NULL, -- 1 vert, 2 jaune, 3 orange, 4 rouge
+  fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_date_heure_echeance_dep (date, heure, echeance, departement)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS vigilance_textes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  date DATE NOT NULL,
+  heure TIME NOT NULL,
+  contenu MEDIUMTEXT NOT NULL,
+  fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_date_heure (date, heure)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS sync_logs (
   id INT AUTO_INCREMENT PRIMARY KEY,
   tache VARCHAR(100) NOT NULL,

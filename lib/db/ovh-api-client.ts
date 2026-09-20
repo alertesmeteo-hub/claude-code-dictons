@@ -80,6 +80,22 @@ export interface ExtremeApi {
   altitude_m: number;
 }
 
+export interface VigilanceCarteApi {
+  echeance: 'J' | 'J1';
+  departement: string;
+  couleur: 1 | 2 | 3 | 4;
+}
+
+export interface VigilanceCarteLigneApi extends VigilanceCarteApi {
+  heure: string;
+}
+
+export interface VigilanceTexteApi {
+  heure: string;
+  contenu: string;
+  fetched_at: string;
+}
+
 export interface FeteJourApi {
   prenoms: string[];
   autresFetes: { nom: string; description: string | null; url: string }[];
@@ -122,6 +138,15 @@ export const ovhApi = {
 
   extremesEnregistrer: (mesures: Record<string, unknown>[]) =>
     appelerApi<{ ok: true; compte: number }>('extremes/france', { method: 'POST', body: JSON.stringify({ mesures }) }),
+
+  vigilanceFrance: () =>
+    appelerApi<{ date: string; carte: VigilanceCarteLigneApi[]; textes: VigilanceTexteApi[] }>('vigilance/france'),
+
+  vigilanceEnregistrer: (date: string, heure: string, carte: VigilanceCarteApi[], texte: string | null) =>
+    appelerApi<{ ok: true; compte: number }>('vigilance/france', {
+      method: 'POST',
+      body: JSON.stringify({ date, heure, carte, texte }),
+    }),
 
   syncLogsListe: (limite = 20) => appelerApi<SyncLogApi[]>(`sync-logs&limite=${limite}`),
 
