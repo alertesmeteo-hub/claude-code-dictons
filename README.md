@@ -108,7 +108,7 @@ Un passage = ~95 appels espacés de 1,5 s (2-3 minutes). Le script garde les 15 
 
 `npm run cron:vigilance-meteo` : archive le bulletin de vigilance courant (toutes les heures via GitHub Actions). Source (API Météo-France, même clé `METEOFRANCE_API_KEY`, souscription « DonneesPubliquesVigilance ») :
 - **DPVigilance v1** `/cartevigilance/encours` : couleur maximale par département (1 vert → 4 rouge), échéances J et J+1 ;
-- **DPVigilance v1** `/textesvigilance/encours?domain=FRA` : bulletin de synthèse national, archivé tel quel (le format exact renvoyé par l'API n'étant pas garanti, il n'est pas interprété).
+- **DPVigilance v1** `/textesvigilance/encours` (sans paramètre `domain`, sinon 404) : bulletin de synthèse national en JSON, archivé tel quel sans être interprété.
 
 Une entrée par (date, heure de bulletin, échéance, département) est conservée : un même jour peut compter plusieurs bulletins (~6h, 16h, réévaluations en cours d'événement), chacun archivé séparément. Les tables `vigilance_carte` et `vigilance_textes` se créent automatiquement au premier appel (comme `fetes_jour`) — pas besoin de passer par phpMyAdmin pour celles-ci.
 

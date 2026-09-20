@@ -10,8 +10,8 @@ import { parseCarteVigilance } from '../lib/meteo/vigilance';
  * souscription à l'API « DonneesPubliquesVigilance ») :
  *  - GET /cartevigilance/encours : carte JSON, couleur maximale par département (1 vert → 4 rouge),
  *    pour les échéances J et J+1 (structure : product.periods[].timelaps.domain_ids[]).
- *  - GET /textesvigilance/encours?domain=FRA : bulletin de synthèse national. Le format exact renvoyé par
- *    l'API n'est pas garanti (texte brut, XML ou JSON selon versions) : conservé tel quel, sans être
+ *  - GET /textesvigilance/encours (sans le paramètre domain, qui renvoie 404 « no matching blob ») :
+ *    bulletin de synthèse national en JSON (product.text_bloc_items[]…). Archivé tel quel, sans être
  *    interprété — l'objectif ici est l'archivage, pas l'affichage.
  * Écrit via l'API OVH (ovhApi.vigilanceEnregistrer) : la base n'est joignable que depuis le réseau OVH.
  */
@@ -55,7 +55,9 @@ async function carteDuJour(): Promise<VigilanceCarteApi[]> {
 
 async function texteDuJour(): Promise<string | null> {
   try {
-    return await get(`${DPVIGILANCE}/textesvigilance/encours?domain=FRA`);
+    // Sans paramètre `domain` : renvoie le JSON de synthèse nationale (avec domain=FRA, l'API répond 404
+    // « no matching blob », vérifié en conditions réelles).
+    return await get(`${DPVIGILANCE}/textesvigilance/encours`);
   } catch (e) {
     // Le texte de synthèse est un complément : son indisponibilité ne doit pas empêcher l'archivage de la carte.
     console.error('Texte de vigilance indisponible :', e instanceof Error ? e.message : e);
