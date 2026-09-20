@@ -80,6 +80,32 @@ function assurerTableFetes($db) {
 	);
 }
 
+// Tables créées automatiquement au premier usage (pas de manipulation phpMyAdmin nécessaire).
+function assurerTablesVigilance($db) {
+	$db->query(
+		"CREATE TABLE IF NOT EXISTS vigilance_carte (
+			id INT AUTO_INCREMENT PRIMARY KEY,
+			date DATE NOT NULL,
+			heure TIME NOT NULL,
+			echeance ENUM('J','J1') NOT NULL,
+			departement VARCHAR(10) NOT NULL,
+			couleur TINYINT NOT NULL,
+			fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE KEY uniq_date_heure_echeance_dep (date, heure, echeance, departement)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+	);
+	$db->query(
+		'CREATE TABLE IF NOT EXISTS vigilance_textes (
+			id INT AUTO_INCREMENT PRIMARY KEY,
+			date DATE NOT NULL,
+			heure TIME NOT NULL,
+			contenu MEDIUMTEXT NOT NULL,
+			fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE KEY uniq_date_heure (date, heure)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+	);
+}
+
 $route = $_GET['route'] ?? '';
 $methode = $_SERVER['REQUEST_METHOD'];
 $db = getDb();
@@ -302,6 +328,7 @@ switch ("$methode:$route") {
 	// ---- Vigilance météo (carte par département + texte de synthèse national) ----
 	// Un jour peut compter plusieurs bulletins (~6h, 16h, réévaluations) : identifiés par (date, heure).
 	case 'GET:vigilance/france':
+		assurerTablesVigilance($db);
 		$aujourdHui = date('Y-m-d');
 		$stmt = $db->prepare('SELECT heure, echeance, departement, couleur FROM vigilance_carte WHERE date = ? ORDER BY heure ASC, echeance ASC, departement ASC');
 		$stmt->bind_param('s', $aujourdHui);
@@ -316,6 +343,7 @@ switch ("$methode:$route") {
 		repondre(['date' => $aujourdHui, 'carte' => $carte, 'textes' => $textes]);
 
 	case 'POST:vigilance/france':
+		assurerTablesVigilance($db);
 		$d = corpsJson();
 		if (empty($d['date']) || empty($d['heure'])) repondre(['erreur' => 'date et heure requises'], 400);
 		$compte = 0;
