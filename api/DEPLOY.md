@@ -18,7 +18,7 @@ Le `.htaccess` bloque `src/`, `tests/`, `schema.sql`, `.env*`. Meilleure option 
 Copier `.env.example` en `.env` et renseigner : `DB_DSN`, `DB_USER`, `DB_PASS`, `IP_SALT` (chaine aleatoire longue), `METEOFRANCE_API_KEY`, `VIGILANCE_SOURCE_URL`. Permissions : `chmod 600 .env`. Ne jamais versionner `.env`.
 
 ## 5. Base de donnees
-Importer `schema.sql` (phpMyAdmin > Importer). C'est un schema initial : pas de migrations pour l'instant, ne le rejouer que sur base vide.
+Aucun SQL a coller : les tables sont creees automatiquement au premier appel (API ou cron) a partir de `schema.sql`, qui est idempotent (`CREATE TABLE IF NOT EXISTS`) et rejoue quand il change. L'utilisateur MariaDB doit avoir le droit `CREATE`. Limite : les `ALTER` sur des tables existantes ne sont pas automatiques ; les documenter avant tout changement de colonne.
 
 ## 6. Crons (Hebergement > Taches CRON)
 | Frequence | Commande |
