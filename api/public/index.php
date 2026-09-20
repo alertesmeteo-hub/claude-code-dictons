@@ -17,7 +17,7 @@ try {
     }
 
     if ($path === '/v1/status' && $method === 'GET') {
-        $limits = ['extremes' => 3 * 3600, 'vigilance' => 45 * 60]; // age max avant de considerer une source en retard
+        $limits = ['extremes' => 3 * 3600, 'vigilance' => 45 * 60, 'records' => 3 * 3600]; // age max avant de considerer une source en retard
         $st = App::db()->prepare("SELECT status, message, finished_at FROM collector_runs WHERE name = ? ORDER BY finished_at DESC LIMIT 1");
         $sources = [];
         foreach ($limits as $name => $max) {
@@ -35,6 +35,67 @@ try {
         }
         $degraded = in_array(true, array_column($sources, 'stale'), true);
         App::ok(['status' => $degraded ? 'degraded' : 'ok', 'sources' => $sources]);
+    }
+
+    if ($path === '/v1/records' && $method === 'GET') {
+        Auth::guard('records');
+        $kind = $_GET['kind'] ?? null;
+        if ($kind !== null && !in_array($kind, ['heat', 'cold', 'tropical'], true)) {
+            App::error(422, 'invalid_kind', 'kind : heat, cold ou tropical.');
+        }
+        $scope = $_GET['scope'] ?? null;
+        if ($scope !== null && !in_array($scope, ['absolute', 'monthly', 'fortnight', 'daily'], true)) {
+            App::error(422, 'invalid_scope', 'scope : absolute, monthly, fortnight ou daily.');
+        }
+        $dep = $_GET['department'] ?? null;
+        if ($dep !== null && !preg_match('/^(\d{2}|2[AB])$/', (string) $dep)) {
+            App::error(422, 'invalid_department', 'department : code sur 2 caracteres (ex. 30, 2A).');
+        }
+        $limit = filter_input(INPUT_GET, 'limit', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 200]]);
+        $offset = filter_input(INPUT_GET, 'offset', FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'max_range' => 100000]]);
+        if ((isset($_GET['limit']) && !$limit) || (isset($_GET['offset']) && $offset === false)) {
+            App::error(422, 'invalid_pagination', 'limit : 1 a 200 ; offset : entier >= 0.');
+        }
+        $limit = $limit ?: 50;
+        $offset = $offset ?: 0;
+
+        $db = App::db();
+        $snap = $db->query('SELECT day, generated_at, latest_observation_at, departments_ok, departments_total, fetched_at FROM records_snapshot WHERE id = 1')->fetch();
+        if (!$snap) {
+            App::error(503, 'no_data', 'Aucune donnee de records disponible.');
+        }
+        $where = '1 = 1';
+        $args = [];
+        if ($kind !== null) { $where .= ' AND kind = ?'; $args[] = $kind; }
+        if ($scope !== null) { $where .= ' AND is_' . $scope . ' = 1'; }
+        if ($dep !== null) { $where .= ' AND department = ?'; $args[] = $dep; }
+        $count = $db->prepare("SELECT COUNT(*) FROM records_events WHERE $where");
+        $count->execute($args);
+        $total = (int) $count->fetchColumn();
+        $st = $db->prepare("SELECT * FROM records_events WHERE $where ORDER BY kind, CASE WHEN kind = 'cold' THEN value ELSE -value END, station_id LIMIT $limit OFFSET $offset");
+        $st->execute($args);
+        $items = [];
+        foreach ($st->fetchAll() as $r) {
+            $scopes = array_values(array_filter(['absolute', 'monthly', 'fortnight', 'daily'], fn($s) => $r['is_' . $s]));
+            $items[] = ['kind' => $r['kind'], 'station_id' => $r['station_id'], 'name' => $r['name'], 'department' => $r['department'],
+                'region' => $r['region'], 'altitude_m' => $r['altitude_m'] === null ? null : (int) $r['altitude_m'],
+                'temperature_c' => (float) $r['value'], 'scopes_beaten' => $scopes, 'previous_records' => json_decode($r['refs'], true)];
+        }
+        $age = time() - strtotime($snap['generated_at'] . ' UTC');
+        App::ok(['day' => $snap['day'], 'total' => $total, 'limit' => $limit, 'offset' => $offset, 'items' => $items], [
+            'source' => 'Meteo-France (observations DPPaquetObs et historiques climatologiques), records calcules par Alertes-Meteo',
+            'record_type' => 'computed_from_station_history',
+            'official' => false,
+            'provisional' => true,
+            'generated_at' => gmdate('c', strtotime($snap['generated_at'] . ' UTC')),
+            'latest_observation_at' => $snap['latest_observation_at'] ? gmdate('c', strtotime($snap['latest_observation_at'] . ' UTC')) : null,
+            'updated_at' => gmdate('c', strtotime($snap['fetched_at'] . ' UTC')),
+            'stale' => $age > 3 * 3600,
+            'coverage' => ['departments_ok' => (int) $snap['departments_ok'], 'departments_total' => (int) $snap['departments_total'],
+                'complete' => $snap['departments_ok'] === $snap['departments_total']],
+            'filters' => ['kind' => $kind, 'scope' => $scope, 'department' => $dep],
+            'notice' => 'Records du jour calcules sur l\'historique de chaque station ; valeurs provisoires, non officielles. Ne pas presenter comme records de France.',
+        ]);
     }
 
     if ($path === '/v1/keys/requests' && $method === 'POST') {

@@ -84,6 +84,21 @@ paths:
         '200': { description: OK }
         '422': { description: Parametre invalide }
         '503': { description: Aucune donnee disponible }
+  /v1/records:
+    get:
+      summary: Records de temperature du jour, calcules sur l'historique de chaque station
+      description: Records calcules et provisoires, non officiels. Ne pas les presenter comme records de France. `meta.coverage` indique la completude.
+      security: [{ ApiKey: [] }]
+      parameters:
+        - { name: kind, in: query, required: false, schema: { type: string, enum: [heat, cold, tropical] } }
+        - { name: scope, in: query, required: false, description: 'Portee du record battu', schema: { type: string, enum: [absolute, monthly, fortnight, daily] } }
+        - { name: department, in: query, required: false, schema: { type: string, pattern: '^(\d{2}|2[AB])$' } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { name: offset, in: query, required: false, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200': { description: OK }
+        '422': { description: Parametre invalide }
+        '503': { description: Aucune donnee disponible }
   /v1/sun:
     get:
       summary: Lever, coucher, midi solaire, aube et crepuscule

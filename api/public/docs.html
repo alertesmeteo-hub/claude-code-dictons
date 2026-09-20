@@ -84,6 +84,18 @@ print(r.json())</pre>
   "meta": { "source": "...", "product_at": "...", "updated_at": "...", "stale": false } }</pre>
 <p>Une liste <code>periods</code> vide signifie qu'aucune vigilance ne depasse <code>min_level</code>. <code>meta.product_at</code> est la date du produit source, <code>meta.updated_at</code> la derniere verification, et <code>meta.stale</code> passe a <code>true</code> si elle date de plus de 45 minutes. <strong>Actualisation :</strong> verification toutes les 15 minutes.</p>
 
+<h2>5. GET /v1/records</h2>
+<p>Records de temperature du jour, <strong>calcules</strong> par comparaison a l'historique de chaque station. Ils sont provisoires et non officiels : ne les presentez pas comme des records de France.</p>
+<table border="1" cellpadding="6" style="border-collapse:collapse">
+<tr><th>Parametre</th><th>Requis</th><th>Description</th></tr>
+<tr><td>kind</td><td>non</td><td><code>heat</code> (chaleur), <code>cold</code> (froid), <code>tropical</code> (nuit tropicale)</td></tr>
+<tr><td>scope</td><td>non</td><td>Portee du record battu : <code>absolute</code>, <code>monthly</code>, <code>fortnight</code>, <code>daily</code></td></tr>
+<tr><td>department</td><td>non</td><td>Departement (<code>30</code>, <code>2A</code>)</td></tr>
+<tr><td>limit / offset</td><td>non</td><td>Pagination, 50 par defaut, 200 maximum</td></tr>
+</table>
+<pre>curl "https://api.alertes-meteo.com/v1/records?kind=heat&amp;scope=absolute&amp;limit=10" -H "X-API-Key: VOTRE_CLE"</pre>
+<p>Chaque element donne la station, la temperature en °C, les portees battues (<code>scopes_beaten</code>) et le record precedent avec sa date (<code>previous_records</code>). <code>meta.coverage</code> indique combien de departements ont un historique ; s'il est incomplet, des records peuvent manquer. <strong>Actualisation :</strong> toutes les 30 minutes environ.</p>
+
 <h2>Autres endpoints</h2>
 <ul>
 <li><code>GET /v1/usage</code> : votre consommation.</li>
