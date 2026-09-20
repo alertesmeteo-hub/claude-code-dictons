@@ -110,7 +110,9 @@ Un passage = ~95 appels espacés de 1,5 s (2-3 minutes). Le script garde les 15 
 - **DPVigilance v1** `/cartevigilance/encours` : couleur maximale par département (1 vert → 4 rouge), échéances J et J+1 ;
 - **DPVigilance v1** `/textesvigilance/encours?domain=FRA` : bulletin de synthèse national, archivé tel quel (le format exact renvoyé par l'API n'étant pas garanti, il n'est pas interprété).
 
-Une entrée par (date, échéance, département) est conservée (mise à jour si le passage suivant change la couleur), plus le dernier texte de synthèse du jour.
+Une entrée par (date, heure de bulletin, échéance, département) est conservée : un même jour peut compter plusieurs bulletins (~6h, 16h, réévaluations en cours d'événement), chacun archivé séparément.
+
+**Historique (2022 → aujourd'hui)** : `npm run backfill:vigilance -- --depuis=2022-01-01 --jusqu-a=2022-12-31` importe, une fois, l'archive publique [« Vigilance météorologique archivée »](https://www.data.gouv.fr/datasets/vigilance-meteorologique-archivee) (`files.data.gouv.fr/meteofrance/data/vigilance/metropole/AAAA/MM/JJ/HHMMSS/CDP_CARTE_EXTERNE.json`, même format que l'API temps réel). Cette archive ne remonte qu'à **2022** (pas d'historique officiel connu avant, alors que la vigilance existe depuis 2001) et ne contient pas de texte de synthèse (uniquement la carte). Script à lancer manuellement (pas planifié), idempotent, avec pause entre les appels — un backfill complet représente plusieurs milliers de requêtes et peut prendre des heures.
 
 GitHub Actions (`.github/workflows/cron-jobs.yml`) reste disponible ; secrets nécessaires : `OVH_API_URL`, `OVH_API_TOKEN`, `METEOFRANCE_API_KEY`.
 

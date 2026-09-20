@@ -86,6 +86,16 @@ export interface VigilanceCarteApi {
   couleur: 1 | 2 | 3 | 4;
 }
 
+export interface VigilanceCarteLigneApi extends VigilanceCarteApi {
+  heure: string;
+}
+
+export interface VigilanceTexteApi {
+  heure: string;
+  contenu: string;
+  fetched_at: string;
+}
+
 export interface FeteJourApi {
   prenoms: string[];
   autresFetes: { nom: string; description: string | null; url: string }[];
@@ -130,12 +140,13 @@ export const ovhApi = {
     appelerApi<{ ok: true; compte: number }>('extremes/france', { method: 'POST', body: JSON.stringify({ mesures }) }),
 
   vigilanceFrance: () =>
-    appelerApi<{ date: string; carte: VigilanceCarteApi[]; texte: { contenu: string; fetched_at: string } | null }>(
-      'vigilance/france'
-    ),
+    appelerApi<{ date: string; carte: VigilanceCarteLigneApi[]; textes: VigilanceTexteApi[] }>('vigilance/france'),
 
-  vigilanceEnregistrer: (carte: VigilanceCarteApi[], texte: string | null) =>
-    appelerApi<{ ok: true; compte: number }>('vigilance/france', { method: 'POST', body: JSON.stringify({ carte, texte }) }),
+  vigilanceEnregistrer: (date: string, heure: string, carte: VigilanceCarteApi[], texte: string | null) =>
+    appelerApi<{ ok: true; compte: number }>('vigilance/france', {
+      method: 'POST',
+      body: JSON.stringify({ date, heure, carte, texte }),
+    }),
 
   syncLogsListe: (limite = 20) => appelerApi<SyncLogApi[]>(`sync-logs&limite=${limite}`),
 

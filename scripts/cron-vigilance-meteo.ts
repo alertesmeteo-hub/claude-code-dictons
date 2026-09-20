@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { ovhApi } from '../lib/db/ovh-api-client';
 import type { VigilanceCarteApi } from '../lib/db/ovh-api-client';
+import { parseCarteVigilance } from '../lib/meteo/vigilance';
 
 /**
  * Archivage quotidien du bulletin de vigilance Météo-France.
@@ -26,6 +27,12 @@ function cle(): string {
 
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+const jourParis = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+const heureParis = () =>
+  new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+    .format(new Date())
+    .replace(/^24/, '00');
+
 /** GET avec l'en-tête apikey ; 3 essais sur erreur temporaire (429 / 5xx). */
 async function get(url: string): Promise<string> {
   let dernier = '';
@@ -41,36 +48,9 @@ async function get(url: string): Promise<string> {
   throw new Error(dernier);
 }
 
-interface DomainCouleur {
-  domain_id: string;
-  max_color_id: number;
-}
-
-interface Periode {
-  echeance: 'J' | 'J1';
-  timelaps?: { domain_ids?: DomainCouleur[] };
-}
-
-interface CarteVigilance {
-  periods?: Periode[];
-  product?: { periods?: Periode[] };
-}
-
 async function carteDuJour(): Promise<VigilanceCarteApi[]> {
   const brut = await get(`${DPVIGILANCE}/cartevigilance/encours`);
-  const json = JSON.parse(brut) as CarteVigilance;
-  const periodes = json.periods ?? json.product?.periods ?? [];
-  if (periodes.length === 0) throw new Error('Carte de vigilance vide ou format inattendu');
-
-  const carte: VigilanceCarteApi[] = [];
-  for (const p of periodes) {
-    for (const d of p.timelaps?.domain_ids ?? []) {
-      if (!/^\d{2,3}$/.test(d.domain_id)) continue; // écarte les domaines non départementaux (ex: mer, DOM séparés)
-      carte.push({ echeance: p.echeance, departement: d.domain_id, couleur: d.max_color_id as 1 | 2 | 3 | 4 });
-    }
-  }
-  if (carte.length === 0) throw new Error('Aucun département exploitable dans la carte de vigilance');
-  return carte;
+  return parseCarteVigilance(brut);
 }
 
 async function texteDuJour(): Promise<string | null> {
@@ -89,7 +69,7 @@ async function main() {
   for (let tentative = 1; tentative <= MAX_TENTATIVES; tentative++) {
     try {
       const [carte, texte] = await Promise.all([carteDuJour(), texteDuJour()]);
-      const { compte } = await ovhApi.vigilanceEnregistrer(carte, texte);
+      const { compte } = await ovhApi.vigilanceEnregistrer(jourParis(), heureParis(), carte, texte);
       await ovhApi.syncLogEnregistrer('meteo_vigilance', 'ok', `${compte} entrées de carte synchronisées${texte ? ' + texte' : ' (sans texte)'}`);
       console.log(`OK — ${compte} entrées de carte synchronisées${texte ? ' + texte de synthèse' : ' (texte indisponible)'}`);
       const pire = carte.reduce((m, c) => Math.max(m, c.couleur), 1);
