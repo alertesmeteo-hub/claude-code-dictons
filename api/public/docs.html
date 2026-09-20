@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Documentation - API Alertes-Meteo</title>
+<meta name="description" content="Documentation de l'API Alertes-Meteo : cle gratuite, exemples cURL, JavaScript, PHP et Python.">
+<style>
+body{font:16px/1.6 system-ui,sans-serif;max-width:820px;margin:0 auto;padding:16px;color:#1a1a1a}
+pre{background:#f4f5f7;padding:12px;overflow:auto;border-radius:6px}
+code{font-family:ui-monospace,monospace}
+@media(prefers-color-scheme:dark){body{background:#111;color:#eee}pre{background:#1e1e1e}a{color:#8ab4ff}}
+</style>
+</head>
+<body>
+<h1>API Alertes-Meteo</h1>
+<p>Une API meteo francaise simple a integrer. Format JSON, cle gratuite. <a href="/openapi.yaml">Fichier OpenAPI</a> (compatible Swagger UI).</p>
+
+<h2>1. Demander une cle gratuite</h2>
+<pre>curl -X POST https://api.alertes-meteo.com/v1/keys/requests \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Votre nom","email":"vous@exemple.fr","usage":"Affichage du lever du soleil sur mon site meteo local, environ 100 appels par jour.","consent":true}'</pre>
+<p>Chaque demande est examinee manuellement, puis la cle est envoyee par email. Elle est valable 2 ans. Envoyez-la dans l'en-tete <code>X-API-Key</code>. Ne la mettez jamais dans du code public cote navigateur. Nous ne conservons que son empreinte. Les informations de la demande servent uniquement a la traiter.</p>
+
+<h2>2. GET /v1/sun</h2>
+<p>Lever, coucher, midi solaire, aube et crepuscule, calcules localement.</p>
+<table border="1" cellpadding="6" style="border-collapse:collapse">
+<tr><th>Parametre</th><th>Requis</th><th>Description</th></tr>
+<tr><td>lat</td><td>oui</td><td>Latitude, -90 a 90</td></tr>
+<tr><td>lon</td><td>oui</td><td>Longitude, -180 a 180</td></tr>
+<tr><td>date</td><td>non</td><td>YYYY-MM-DD, defaut aujourd'hui</td></tr>
+<tr><td>tz</td><td>non</td><td>Fuseau IANA, defaut Europe/Paris</td></tr>
+</table>
+
+<h3>cURL</h3>
+<pre>curl "https://api.alertes-meteo.com/v1/sun?lat=48.8566&amp;lon=2.3522&amp;date=2026-06-21" -H "X-API-Key: VOTRE_CLE"</pre>
+<h3>JavaScript</h3>
+<pre>const r = await fetch("https://api.alertes-meteo.com/v1/sun?lat=48.8566&amp;lon=2.3522", {
+  headers: { "X-API-Key": "VOTRE_CLE" }
+});
+console.log(await r.json());</pre>
+<h3>PHP</h3>
+<pre>$ctx = stream_context_create(['http' => ['header' => "X-API-Key: VOTRE_CLE\r\n"]]);
+echo file_get_contents('https://api.alertes-meteo.com/v1/sun?lat=48.8566&amp;lon=2.3522', false, $ctx);</pre>
+<h3>Python</h3>
+<pre>import requests
+r = requests.get("https://api.alertes-meteo.com/v1/sun",
+                 params={"lat": 48.8566, "lon": 2.3522}, headers={"X-API-Key": "VOTRE_CLE"})
+print(r.json())</pre>
+
+<h3>Reponse</h3>
+<pre>{
+  "data": { "date": "2026-06-21", "timezone": "Europe/Paris",
+    "sunrise": "2026-06-21T05:47:00+02:00", "solar_noon": "...", "sunset": "...",
+    "dawn": "...", "dusk": "...", "day_length_seconds": 58000, "polar": null },
+  "meta": { "source": "Calcul local (algorithme NOAA)", "stale": false,
+    "version": "v1", "units": "metric", "generated_at": "..." }
+}</pre>
+<p><strong>Actualisation :</strong> calcul a chaque requete, aucune donnee externe. En zone polaire, les heures sont <code>null</code> et <code>polar</code> vaut <code>day</code> ou <code>night</code>.</p>
+
+<h2>3. GET /v1/extremes/france</h2>
+<p>Temperatures maximale et minimale du jour parmi les stations Meteo-France collectees. Ce ne sont pas des records officiels.</p>
+<table border="1" cellpadding="6" style="border-collapse:collapse">
+<tr><th>Parametre</th><th>Requis</th><th>Description</th></tr>
+<tr><td>altitude_max</td><td>non</td><td>Altitude maximale des stations, en metres (ex. 500)</td></tr>
+<tr><td>stations</td><td>non</td><td><code>toutes</code> (defaut) ou <code>principales</code> (reseau RADOME)</td></tr>
+</table>
+<pre>curl "https://api.alertes-meteo.com/v1/extremes/france?altitude_max=500" -H "X-API-Key: VOTRE_CLE"</pre>
+<p>Reponse : <code>data.max</code> et <code>data.min</code> (temperature, station, departement, altitude, heure d'observation UTC). <code>meta.updated_at</code>, <code>meta.stale</code> et <code>meta.coverage</code> (departements collectes) indiquent la fraicheur et la completude ; si <code>coverage.complete</code> vaut <code>false</code>, l'echantillon est partiel.</p>
+<p><strong>Source :</strong> Meteo-France (observations horaires), retraitees par Alertes-Meteo. <strong>Actualisation :</strong> toutes les heures.</p>
+
+<h2>4. GET /v1/vigilance</h2>
+<p>Niveaux de vigilance par departement et par phenomene, pour aujourd'hui (<code>J</code>) et demain (<code>J1</code>). Service non officiel, a titre informatif : la reference reste vigilance.meteofrance.fr.</p>
+<table border="1" cellpadding="6" style="border-collapse:collapse">
+<tr><th>Parametre</th><th>Requis</th><th>Description</th></tr>
+<tr><td>domain</td><td>non</td><td>Departement (<code>30</code>, <code>2A</code>) : renvoie aussi sa zone cotiere (<code>3010</code>). Un code a 4 caracteres cible uniquement la zone cotiere.</td></tr>
+<tr><td>echeance</td><td>non</td><td><code>J</code> ou <code>J1</code></td></tr>
+<tr><td>min_level</td><td>non</td><td>1 (vert) a 4 (rouge). Defaut 2 : seules les vigilances jaune et plus sont listees.</td></tr>
+</table>
+<pre>curl "https://api.alertes-meteo.com/v1/vigilance?domain=30" -H "X-API-Key: VOTRE_CLE"</pre>
+<pre>{ "data": { "periods": [ { "echeance": "J", "domains": [ { "domain_id": "30", "max_level": 3,
+    "phenomena": [ { "phenomenon_id": 3, "phenomenon": "orages", "level": 3, "color": "orange",
+      "begin": "2026-09-20T04:00:00+00:00", "end": "2026-09-20T22:00:00+00:00" } ] } ] } ] },
+  "meta": { "source": "...", "product_at": "...", "updated_at": "...", "stale": false } }</pre>
+<p>Une liste <code>periods</code> vide signifie qu'aucune vigilance ne depasse <code>min_level</code>. <code>meta.product_at</code> est la date du produit source, <code>meta.updated_at</code> la derniere verification, et <code>meta.stale</code> passe a <code>true</code> si elle date de plus de 45 minutes. <strong>Actualisation :</strong> verification toutes les 15 minutes.</p>
+
+<h2>Autres endpoints</h2>
+<ul>
+<li><code>GET /v1/usage</code> : votre consommation.</li>
+<li><code>DELETE /v1/keys</code> : revoque la cle utilisee.</li>
+<li><code>GET /v1/health</code> : etat du service.</li>
+</ul>
+
+<h2>Erreurs</h2>
+<p>Format : <code>{"error":{"code":"...","message":"..."}}</code>. Codes : 401 cle invalide, 403 compte suspendu, 404 inconnu, 422 parametre invalide, 429 quota (voir <code>Retry-After</code> et <code>X-RateLimit-*</code>), 503 indisponible.</p>
+<p>Offre gratuite : 30 requetes/minute, 10 000/mois.</p>
+</body>
+</html>
