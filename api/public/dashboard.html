@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Espace développeur | Alertes-Meteo API</title>
+<meta name="description" content="Consultez votre quota et votre consommation de l'API Alertes-Meteo.">
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<header class="site"><div class="wrap">
+  <a class="logo" href="/">Alertes-Meteo API</a>
+  <nav aria-label="Navigation principale">
+    <a href="/docs">Documentation</a><a href="/statut">Statut</a><a href="/dashboard" aria-current="page">Espace développeur</a><a href="/cle">Demander une clé</a>
+  </nav>
+</div></header>
+
+<main class="wrap">
+  <h1>Espace développeur</h1>
+
+  <section id="login">
+    <p class="lead">Entrez votre clé API pour voir votre quota et votre consommation. Elle n'est conservée que dans cet onglet, jamais enregistrée par le navigateur.</p>
+    <form id="loginForm" novalidate>
+      <label for="key">Clé API</label>
+      <input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="am_xxxxxxxx_…">
+      <div class="actions"><button class="btn" type="submit">Afficher mon espace</button> <a class="btn secondary" href="/cle">Je n'ai pas de clé</a></div>
+    </form>
+  </section>
+
+  <div id="loginMsg" class="msg err" role="alert" hidden></div>
+
+  <section id="board" hidden>
+    <div class="actions"><span id="who" class="muted"></span> <button class="btn secondary" id="logout" type="button">Se déconnecter</button></div>
+    <div class="grid">
+      <div class="card"><h3>Ce mois-ci</h3><p class="stat" id="monthUsed">–</p><p id="monthLimit" class="muted"></p><div class="bar"><span id="monthBar" style="width:0"></span></div></div>
+      <div class="card"><h3>Restant ce mois</h3><p class="stat" id="monthLeft">–</p><p class="muted">requêtes</p></div>
+      <div class="card"><h3>Cette minute</h3><p class="stat" id="minuteUsed">–</p><p id="minuteLimit" class="muted"></p></div>
+      <div class="card"><h3>Clé</h3><p class="stat" id="expires">–</p><p class="muted">date d'expiration</p></div>
+    </div>
+
+    <h2>Requêtes par jour (30 derniers jours)</h2>
+    <div class="chart" id="chart" role="img" aria-label="Requêtes par jour"></div>
+    <p class="muted" id="chartNote"></p>
+
+    <h2>Endpoints les plus appelés</h2>
+    <table class="data"><thead><tr><th>Endpoint</th><th>Requêtes (30 jours)</th></tr></thead><tbody id="endpoints"></tbody></table>
+
+    <h2>Gestion de la clé</h2>
+    <p class="muted">Révoquer la clé la désactive immédiatement. Pour en obtenir une nouvelle, faites une <a href="/cle">nouvelle demande</a>.</p>
+    <button class="btn secondary" id="revoke" type="button">Révoquer cette clé</button>
+    <div id="revokeMsg" class="msg" role="status" hidden></div>
+  </section>
+</main>
+
+<footer class="site"><div class="wrap">Source : Météo-France (données retraitées par Alertes-Meteo, service non officiel).</div></footer>
+<script src="/assets/dashboard.js"></script>
+</body>
+</html>

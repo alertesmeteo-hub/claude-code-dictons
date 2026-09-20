@@ -67,6 +67,7 @@ final class App
         header('Content-Type: application/json; charset=utf-8');
         header('Access-Control-Allow-Origin: *');
         header('Access-Control-Allow-Headers: X-API-Key, Content-Type');
+        header('Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS');
         foreach ($headers as $k => $v) {
             header("$k: $v");
         }

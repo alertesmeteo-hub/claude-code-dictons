@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Statut du service | Alertes-Meteo API</title>
+<meta name="description" content="État de l'API Alertes-Meteo : disponibilité et fraîcheur des sources de données.">
+<link rel="canonical" href="https://api.alertes-meteo.com/statut">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<header class="site"><div class="wrap">
+  <a class="logo" href="/">Alertes-Meteo API</a>
+  <nav aria-label="Navigation principale">
+    <a href="/docs">Documentation</a><a href="/statut" aria-current="page">Statut</a><a href="/dashboard">Espace développeur</a><a href="/cle">Demander une clé</a>
+  </nav>
+</div></header>
+
+<main class="wrap">
+  <h1>Statut du service</h1>
+  <p id="global" class="lead" role="status" aria-live="polite">Vérification en cours…</p>
+  <table class="data" aria-label="Sources de données">
+    <thead><tr><th>Source</th><th>État</th><th>Dernière mise à jour réussie</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <p class="muted">« En retard » signifie que la source n'a pas été actualisée dans le délai attendu ; les données servies restent alors signalées <code>stale</code>. Mise à jour de cette page toutes les 60 secondes.</p>
+</main>
+
+<footer class="site"><div class="wrap">Source : Météo-France (données retraitées par Alertes-Meteo, service non officiel).</div></footer>
+<script src="/assets/statut.js"></script>
+</body>
+</html>

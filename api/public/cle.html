@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Demander une clé API gratuite | Alertes-Meteo</title>
+<meta name="description" content="Demandez une clé API gratuite pour l'API météo Alertes-Meteo. Demande examinée manuellement, clé envoyée par email.">
+<link rel="canonical" href="https://api.alertes-meteo.com/cle">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<header class="site"><div class="wrap">
+  <a class="logo" href="/">Alertes-Meteo API</a>
+  <nav aria-label="Navigation principale">
+    <a href="/docs">Documentation</a><a href="/statut">Statut</a><a href="/dashboard">Espace développeur</a><a href="/cle" aria-current="page">Demander une clé</a>
+  </nav>
+</div></header>
+
+<main class="wrap">
+  <h1>Demander une clé API gratuite</h1>
+  <p class="lead">Décrivez brièvement votre projet. Après examen manuel, la clé vous est envoyée par email. Elle est valable 2 ans.</p>
+
+  <form id="form" novalidate>
+    <label for="name">Nom *</label>
+    <input id="name" name="name" type="text" maxlength="100" required autocomplete="name">
+    <label for="email">Email *</label>
+    <input id="email" name="email" type="email" maxlength="190" required autocomplete="email">
+    <label for="organization">Organisation <small>(facultatif)</small></label>
+    <input id="organization" name="organization" type="text" maxlength="100" autocomplete="organization">
+    <label for="website">Site internet <small>(facultatif)</small></label>
+    <input id="website" name="website" type="url" maxlength="190" placeholder="https://" autocomplete="url">
+    <label for="usage">Utilisation prévue *</label>
+    <textarea id="usage" name="usage" rows="5" minlength="20" maxlength="2000" required placeholder="Projet, zones consultées, fréquence prévue (20 caractères minimum)"></textarea>
+    <div class="hp" aria-hidden="true"><label for="hp">Ne pas remplir</label><input id="hp" name="hp" type="text" tabindex="-1" autocomplete="off"></div>
+    <label class="check"><input id="consent" name="consent" type="checkbox" required> J'accepte que ces informations soient utilisées uniquement pour traiter ma demande de clé API.</label>
+    <div class="actions"><button class="btn" id="submit" type="submit">Envoyer la demande</button></div>
+  </form>
+  <div id="result" role="status" aria-live="polite" hidden></div>
+  <p class="muted">Ne mettez jamais votre clé dans du code public côté navigateur. Nous ne conservons que son empreinte.</p>
+</main>
+
+<footer class="site"><div class="wrap">Source : Météo-France (données retraitées par Alertes-Meteo, service non officiel).</div></footer>
+<script src="/assets/cle.js"></script>
+</body>
+</html>

@@ -221,9 +221,32 @@ try {
 
     if ($path === '/v1/usage' && $method === 'GET') {
         $id = Auth::guard('usage');
-        $st = App::db()->prepare("SELECT bucket, endpoint, hits FROM usage_counters WHERE key_id = ? AND (bucket LIKE 'd%' OR bucket = ?) ORDER BY bucket DESC LIMIT 200");
-        $st->execute([$id, 'M' . gmdate('Ym')]);
-        App::ok(['counters' => $st->fetchAll()]);
+        $db = App::db();
+        $k = $db->prepare('SELECT k.prefix, k.expires_at, u.plan, p.per_minute, p.per_month
+            FROM api_keys k JOIN users u ON u.id = k.user_id JOIN plans p ON p.code = u.plan WHERE k.id = ?');
+        $k->execute([$id]);
+        $key = $k->fetch();
+        $used = $db->prepare("SELECT bucket, hits FROM usage_counters WHERE key_id = ? AND endpoint = '*' AND bucket IN (?, ?)");
+        $used->execute([$id, 'm' . gmdate('YmdHi'), 'M' . gmdate('Ym')]);
+        $u = array_column($used->fetchAll(), 'hits', 'bucket');
+        $since = 'd' . gmdate('Ymd', time() - 29 * 86400);
+        $d = $db->prepare("SELECT bucket, endpoint, hits FROM usage_counters WHERE key_id = ? AND bucket LIKE 'd%' AND bucket >= ? ORDER BY bucket DESC LIMIT 500");
+        $d->execute([$id, $since]);
+        $days = [];
+        foreach ($d->fetchAll() as $r) {
+            $day = substr($r['bucket'], 1, 4) . '-' . substr($r['bucket'], 5, 2) . '-' . substr($r['bucket'], 7, 2);
+            $days[$day]['day'] = $day;
+            $days[$day]['total'] = ($days[$day]['total'] ?? 0) + (int) $r['hits'];
+            $days[$day]['endpoints'][$r['endpoint']] = (int) $r['hits'];
+        }
+        App::ok([
+            'key_prefix' => $key['prefix'],
+            'plan' => $key['plan'],
+            'expires_at' => gmdate('c', strtotime($key['expires_at'] . ' UTC')),
+            'limits' => ['per_minute' => (int) $key['per_minute'], 'per_month' => (int) $key['per_month']],
+            'used' => ['minute' => (int) ($u['m' . gmdate('YmdHi')] ?? 0), 'month' => (int) ($u['M' . gmdate('Ym')] ?? 0)],
+            'days' => array_values($days),
+        ]);
     }
 
     if ($path === '/v1/sun' && $method === 'GET') {
