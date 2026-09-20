@@ -11,7 +11,7 @@ RewriteRule ^v1/ public/index.php [L]
 
 # Site public
 RewriteRule ^$ public/index.html [L]
-RewriteRule ^(docs|cle|statut|dashboard)/?$ public/$1.html [L]
+RewriteRule ^(docs|cle|statut|dashboard|playground)/?$ public/$1.html [L]
 RewriteRule ^(openapi\.yaml|robots\.txt|sitemap\.xml)$ public/$1 [L]
 RewriteRule ^assets/(.+)$ public/assets/$1 [L]
 
