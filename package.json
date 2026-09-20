@@ -14,6 +14,7 @@
     "cron:vigilance-meteo": "tsx scripts/cron-vigilance-meteo.ts",
     "backfill:vigilance": "tsx scripts/backfill-vigilance.ts",
     "backfill:vigilance-national": "tsx scripts/backfill-vigilance-national.ts",
+    "backfill:vigilance-departement": "tsx scripts/backfill-vigilance-departement.ts",
     "test": "vitest run"
   },
   "dependencies": {

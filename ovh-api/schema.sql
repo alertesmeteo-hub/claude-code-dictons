@@ -91,6 +91,14 @@ CREATE TABLE IF NOT EXISTS vigilance_national_jour (
   fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS vigilance_departement_jour (
+  date DATE NOT NULL,
+  departement VARCHAR(10) NOT NULL,
+  couleur TINYINT NOT NULL, -- 1 vert, 2 jaune, 3 orange, 4 rouge (couleur max du jour, source tierce vigiscript.fr)
+  fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (date, departement)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS vigilance_textes (
   id INT AUTO_INCREMENT PRIMARY KEY,
   date DATE NOT NULL,

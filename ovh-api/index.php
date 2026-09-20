@@ -389,6 +389,30 @@ switch ("$methode:$route") {
 		}
 		repondre(['ok' => true, 'compte' => $compte]);
 
+	// ---- Vigilance historique par département (2001+, source tierce vigiscript.fr — voir backfill-vigilance-departement.ts) ----
+	case 'POST:vigilance/departement-historique':
+		$db->query(
+			'CREATE TABLE IF NOT EXISTS vigilance_departement_jour (
+				date DATE NOT NULL,
+				departement VARCHAR(10) NOT NULL,
+				couleur TINYINT NOT NULL,
+				fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY (date, departement)
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+		);
+		$d = corpsJson();
+		$compte = 0;
+		$stmt = $db->prepare(
+			'INSERT INTO vigilance_departement_jour (date, departement, couleur) VALUES (?, ?, ?)
+			 ON DUPLICATE KEY UPDATE couleur=VALUES(couleur), fetched_at=CURRENT_TIMESTAMP'
+		);
+		foreach (($d['jours'] ?? []) as $j) {
+			$stmt->bind_param('ssi', $j['date'], $j['departement'], $j['couleur']);
+			$stmt->execute();
+			$compte++;
+		}
+		repondre(['ok' => true, 'compte' => $compte]);
+
 	// ---- Journal des tâches ----
 	case 'GET:sync-logs':
 		$limite = min((int)($_GET['limite'] ?? 20), 200);

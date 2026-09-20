@@ -102,6 +102,12 @@ export interface VigilanceNationalJourApi {
   commentaire: string | null;
 }
 
+export interface VigilanceDepartementJourApi {
+  date: string;
+  departement: string;
+  couleur: 1 | 2 | 3 | 4;
+}
+
 export interface FeteJourApi {
   prenoms: string[];
   autresFetes: { nom: string; description: string | null; url: string }[];
@@ -156,6 +162,12 @@ export const ovhApi = {
 
   vigilanceNationalEnregistrer: (jours: VigilanceNationalJourApi[]) =>
     appelerApi<{ ok: true; compte: number }>('vigilance/national', { method: 'POST', body: JSON.stringify({ jours }) }),
+
+  vigilanceDepartementHistoriqueEnregistrer: (jours: VigilanceDepartementJourApi[]) =>
+    appelerApi<{ ok: true; compte: number }>('vigilance/departement-historique', {
+      method: 'POST',
+      body: JSON.stringify({ jours }),
+    }),
 
   syncLogsListe: (limite = 20) => appelerApi<SyncLogApi[]>(`sync-logs&limite=${limite}`),
 

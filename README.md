@@ -116,6 +116,8 @@ Une entrée par (date, heure de bulletin, échéance, département) est conserv�
 
 **Historique national (octobre 2001 → aujourd'hui)** : `npm run backfill:vigilance-national -- --depuis=2001-10` importe, une fois, l'archive officielle [vigilance-public.meteo.fr](http://vigilance-public.meteo.fr/) (`tableaux_mensuels.php?start_date=AAAA-MM`, un appel par mois). Cette archive remonte à la création du dispositif (2001), mais ne donne que la **couleur maximale nationale** par jour (pas de détail département — celui-ci n'existe pour cette période que sous forme de cartes GIF, non exploitées ici). Table `vigilance_national_jour`.
 
+**Historique par département (octobre 2001 → aujourd'hui)** : `npm run backfill:vigilance-departement -- --depuis=2001-10` importe, une fois, le détail par département depuis le site tiers [vigiscript.fr](https://www.vigiscript.fr/Ancien_bulletin/) (`affichage_calendrier.php?department=XX&year=AAAA&month=MM&ajax=month-colors`, JSON). **Ce n'est pas une source officielle Météo-France** — c'est une reconstitution tierce, la meilleure approximation disponible pour cette période (l'officiel n'existe qu'en images GIF avant fin 2022). Environ 95 départements × 300 mois = ~28 500 appels, prévoir plusieurs heures. Table `vigilance_departement_jour`.
+
 Les deux scripts sont à lancer manuellement (pas planifiés), idempotents, avec pause entre les appels — peuvent prendre plusieurs heures pour un backfill complet.
 
 GitHub Actions (`.github/workflows/cron-jobs.yml`) reste disponible ; secrets nécessaires : `OVH_API_URL`, `OVH_API_TOKEN`, `METEOFRANCE_API_KEY`.
@@ -162,6 +164,7 @@ Toutes les routes nécessitent l'en-tête `Authorization: Bearer <DICTON_API_TOK
 | `?route=vigilance/france` | GET | Bulletin de vigilance archivé du jour (carte + texte) |
 | `?route=vigilance/france` | POST | Enregistrer un bulletin (`{carte: [...], texte}`) |
 | `?route=vigilance/national` | POST | Enregistrer l'historique national (`{jours: [...]}`, backfill 2001+) |
+| `?route=vigilance/departement-historique` | POST | Enregistrer l'historique par département (`{jours: [...]}`, backfill 2001+, source vigiscript.fr) |
 | `?route=sync-logs&limite=` | GET | Derniers logs de tâches |
 | `?route=sync-logs` | POST | Ajouter un log |
 | `?route=pages-jour` | POST | Traçabilité génération du jour |
