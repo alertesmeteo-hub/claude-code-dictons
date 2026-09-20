@@ -2,7 +2,10 @@ openapi: 3.0.3
 info:
   title: API Alertes-Meteo
   version: 1.0.0
-  description: API meteo francaise simple a integrer. Version MVP gratuite.
+  description: |
+    API meteo francaise simple a integrer. Version MVP gratuite.
+
+    Source : Meteo-France. Les endpoints extremes, vigilance, records et rain reposent sur des informations creees a partir de donnees de Meteo-France (Licence Ouverte Etalab), retraitees par Alertes-Meteo. Service non officiel, non valide par Meteo-France. L'endpoint sun est calcule localement.
 servers:
   - url: https://api.alertes-meteo.com
 components:
@@ -101,7 +104,7 @@ paths:
         '503': { description: Aucune donnee disponible }
   /v1/rain:
     get:
-      summary: Pluie observee par station (metropole) : 1 h, 24 h, 48 h, 72 h, mois, saison, annee
+      summary: 'Pluie observee par station (metropole) : 1 h, 24 h, 48 h, 72 h, mois, saison, annee'
       description: Cumuls provisoires Meteo-France. Chaque cumul porte `complete` et `hours_covered` ; un cumul incomplet ne couvre pas toute la periode.
       security: [{ ApiKey: [] }]
       parameters:
