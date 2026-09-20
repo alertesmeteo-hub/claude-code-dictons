@@ -19,7 +19,7 @@ if (App::switchOff('collector:rain')) {
 
 function logRun(string $status, string $msg, int $n): void
 {
-    App::db()->prepare('INSERT INTO collector_runs (name, status, message, departments_ok, departments_total, finished_at) VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP())')
+    App::db()->prepare('INSERT INTO am_collector_runs (name, status, message, departments_ok, departments_total, finished_at) VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP())')
         ->execute(['rain', $status, mb_substr($msg, 0, 255), $n, $n]);
 }
 
@@ -102,23 +102,23 @@ try {
     }
 
     $db = App::db();
-    $cur = $db->query('SELECT generated_at FROM rain_snapshot WHERE id = 1')->fetchColumn();
+    $cur = $db->query('SELECT generated_at FROM am_rain_snapshot WHERE id = 1')->fetchColumn();
     if ($cur === $generated) {
-        $db->exec('UPDATE rain_snapshot SET fetched_at = UTC_TIMESTAMP() WHERE id = 1');
+        $db->exec('UPDATE am_rain_snapshot SET fetched_at = UTC_TIMESTAMP() WHERE id = 1');
         logRun('ok', "source inchangee ($generated UTC)", $n);
         echo "Source inchangee\n";
         exit(0);
     }
     $db->beginTransaction();
-    $db->exec('DELETE FROM rain_stations');
-    $ins = $db->prepare('INSERT INTO rain_stations (station_id, name, department, lat, lon, observed_at, rr1, rr24, rr24_hours, rr24_complete,
+    $db->exec('DELETE FROM am_rain_stations');
+    $ins = $db->prepare('INSERT INTO am_rain_stations (station_id, name, department, lat, lon, observed_at, rr1, rr24, rr24_hours, rr24_complete,
         rr48, rr48_hours, rr48_complete, rr72, rr72_hours, rr72_complete, rr_month, rr_month_complete, rr_season, rr_season_complete,
         rr_year, rr_year_complete, rr_month_mean, rr_year_mean) VALUES (' . implode(',', array_fill(0, 24, '?')) . ')
         ON DUPLICATE KEY UPDATE name = VALUES(name)');
     foreach ($rows as $r) {
         $ins->execute($r);
     }
-    $db->prepare('INSERT INTO rain_snapshot (id, generated_at, latest_observation_at, stations, fetched_at) VALUES (1, ?, ?, ?, UTC_TIMESTAMP())
+    $db->prepare('INSERT INTO am_rain_snapshot (id, generated_at, latest_observation_at, stations, fetched_at) VALUES (1, ?, ?, ?, UTC_TIMESTAMP())
         ON DUPLICATE KEY UPDATE generated_at = VALUES(generated_at), latest_observation_at = VALUES(latest_observation_at), stations = VALUES(stations), fetched_at = UTC_TIMESTAMP()')
         ->execute([$generated, isset($doc['latest_observation_at']) ? utc($doc['latest_observation_at']) : null, $n]);
     $db->commit();

@@ -67,7 +67,7 @@ function listStations(): array
 
 function logRun(string $status, string $msg, int $ok, int $total): void
 {
-    App::db()->prepare('INSERT INTO collector_runs (name,status,message,departments_ok,departments_total,finished_at) VALUES (?,?,?,?,?,UTC_TIMESTAMP())')
+    App::db()->prepare('INSERT INTO am_collector_runs (name,status,message,departments_ok,departments_total,finished_at) VALUES (?,?,?,?,?,UTC_TIMESTAMP())')
         ->execute(['extremes', $status, mb_substr($msg, 0, 255), $ok, $total]);
 }
 
@@ -110,14 +110,14 @@ try {
     if (!$agg) throw new RuntimeException('Aucune observation du jour');
 
     $utc = fn(?string $iso) => $iso ? (new DateTimeImmutable($iso))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s') : null;
-    $st = App::db()->prepare('INSERT INTO station_daily (day,station_id,name,department,altitude_m,principal,tmax,tmax_at,tmin,tmin_at,updated_at)
+    $st = App::db()->prepare('INSERT INTO am_station_daily (day,station_id,name,department,altitude_m,principal,tmax,tmax_at,tmin,tmin_at,updated_at)
         VALUES (?,?,?,?,?,?,?,?,?,?,UTC_TIMESTAMP())
         ON DUPLICATE KEY UPDATE name=VALUES(name), altitude_m=VALUES(altitude_m), principal=VALUES(principal), tmax=VALUES(tmax), tmax_at=VALUES(tmax_at), tmin=VALUES(tmin), tmin_at=VALUES(tmin_at), updated_at=UTC_TIMESTAMP()');
     foreach ($agg as $id => $a) {
         $s = $stations[$id];
         $st->execute([$today, $id, $s['name'], $s['dep'], (int) round($s['alt']), (int) $s['main'], $a[0] ?? null, $utc($a[1] ?? null), $a[2] ?? null, $utc($a[3] ?? null)]);
     }
-    App::db()->prepare('DELETE FROM station_daily WHERE day < DATE_SUB(?, INTERVAL 7 DAY)')->execute([$today]);
+    App::db()->prepare('DELETE FROM am_station_daily WHERE day < DATE_SUB(?, INTERVAL 7 DAY)')->execute([$today]);
     logRun('ok', count($agg) . ' stations', $okDeps, $total);
     echo count($agg) . " stations, $okDeps/$total departements\n";
 } catch (Throwable $e) {

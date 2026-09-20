@@ -20,7 +20,7 @@ if (App::switchOff('collector:vigilance')) {
 
 function logRun(string $status, string $msg, int $domains): void
 {
-    App::db()->prepare('INSERT INTO collector_runs (name, status, message, departments_ok, departments_total, finished_at) VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP())')
+    App::db()->prepare('INSERT INTO am_collector_runs (name, status, message, departments_ok, departments_total, finished_at) VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP())')
         ->execute(['vigilance', $status, mb_substr($msg, 0, 255), $domains, $domains]);
 }
 
@@ -87,20 +87,20 @@ try {
     }
 
     $db = App::db();
-    $cur = $db->query('SELECT product_datetime FROM vigilance_snapshot WHERE id = 1')->fetchColumn();
+    $cur = $db->query('SELECT product_datetime FROM am_vigilance_snapshot WHERE id = 1')->fetchColumn();
     if ($cur === $productAt) {
-        $db->exec('UPDATE vigilance_snapshot SET fetched_at = UTC_TIMESTAMP() WHERE id = 1');
+        $db->exec('UPDATE am_vigilance_snapshot SET fetched_at = UTC_TIMESTAMP() WHERE id = 1');
         logRun('ok', "produit inchange ($productAt UTC)", $domains);
         echo "Produit inchange\n";
         exit(0);
     }
     $db->beginTransaction();
-    $db->exec('DELETE FROM vigilance_items');
-    $ins = $db->prepare('INSERT INTO vigilance_items (echeance, domain_id, phenomenon_id, color_id, begin_time, end_time) VALUES (?, ?, ?, ?, ?, ?)');
+    $db->exec('DELETE FROM am_vigilance_items');
+    $ins = $db->prepare('INSERT INTO am_vigilance_items (echeance, domain_id, phenomenon_id, color_id, begin_time, end_time) VALUES (?, ?, ?, ?, ?, ?)');
     foreach ($rows as $r) {
         $ins->execute($r);
     }
-    $db->prepare('INSERT INTO vigilance_snapshot (id, product_datetime, fetched_at) VALUES (1, ?, UTC_TIMESTAMP())
+    $db->prepare('INSERT INTO am_vigilance_snapshot (id, product_datetime, fetched_at) VALUES (1, ?, UTC_TIMESTAMP())
         ON DUPLICATE KEY UPDATE product_datetime = VALUES(product_datetime), fetched_at = UTC_TIMESTAMP()')->execute([$productAt]);
     $db->commit();
     logRun('ok', count($rows) . " lignes ($productAt UTC)", $domains);

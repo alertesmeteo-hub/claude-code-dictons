@@ -18,6 +18,7 @@ Le `.htaccess` bloque `src/`, `tests/`, `schema.sql`, `.env*`. Meilleure option 
 Copier `.env.example` en `.env` et renseigner : `DB_DSN`, `DB_USER`, `DB_PASS`, `IP_SALT` (chaine aleatoire longue), `METEOFRANCE_API_KEY`, `VIGILANCE_SOURCE_URL`, `RECORDS_SOURCE_URL`, `RAIN_SOURCE_URL` et `ADMIN_TOKEN` (32 caracteres minimum ; en generer un avec `php -r "echo bin2hex(random_bytes(24));"`). L'espace d'administration est sur `/admin` ; sans `ADMIN_TOKEN`, il reste desactive. Permissions : `chmod 600 .env`. Ne jamais versionner `.env`.
 
 ## 5. Base de donnees
+Toutes les tables de l'API sont prefixees `am_` : elles peuvent cohabiter sans conflit dans une base deja utilisee par un autre projet.
 Aucun SQL a coller : les tables sont creees automatiquement au premier appel (API ou cron) a partir de `schema.sql`, qui est idempotent (`CREATE TABLE IF NOT EXISTS`) et rejoue quand il change. L'utilisateur MariaDB doit avoir le droit `CREATE`. Limite : les `ALTER` sur des tables existantes ne sont pas automatiques ; les documenter avant tout changement de colonne.
 
 ## 6. Crons (Hebergement > Taches CRON)
@@ -27,7 +28,7 @@ Aucun SQL a coller : les tables sont creees automatiquement au premier appel (AP
 | `5 * * * *` | `php ~/api/cron/collect_extremes.php` |
 | `*/30 * * * *` | `php ~/api/cron/collect_records.php` |
 | `*/20 * * * *` | `php ~/api/cron/collect_rain.php` |
-Adapter le chemin selon le dossier reel. Le premier passage manuel : lancer les deux commandes en SSH, puis verifier `SELECT * FROM collector_runs ORDER BY id DESC LIMIT 5;`.
+Adapter le chemin selon le dossier reel. Le premier passage manuel : lancer les deux commandes en SSH, puis verifier `SELECT * FROM am_collector_runs ORDER BY id DESC LIMIT 5;`.
 
 ## 7. Premiere cle
 1. `curl -X POST https://api.alertes-meteo.com/v1/keys/requests -H "Content-Type: application/json" -d '{"name":"Test","email":"vous@exemple.fr","usage":"Test interne de l API avant ouverture.","consent":true}'`
