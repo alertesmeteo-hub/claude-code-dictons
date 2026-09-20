@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Playground API | Alertes-Meteo</title>
+<meta name="description" content="Testez l'API météo Alertes-Meteo depuis votre navigateur : choisissez un endpoint, des paramètres, et obtenez l'URL, la requête cURL, le JSON et le temps de réponse.">
+<link rel="canonical" href="https://api.alertes-meteo.com/playground">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<header class="site"><div class="wrap">
+  <a class="logo" href="/">Alertes-Meteo API</a>
+  <nav aria-label="Navigation principale">
+    <a href="/docs">Documentation</a><a href="/playground" aria-current="page">Playground</a><a href="/statut">Statut</a><a href="/dashboard">Espace développeur</a><a href="/cle">Demander une clé</a>
+  </nav>
+</div></header>
+
+<main class="wrap">
+  <h1>Playground</h1>
+  <p class="lead">Testez un endpoint avec votre propre clé. La clé n'est conservée que dans cet onglet et n'apparaît jamais dans l'URL ni dans la requête cURL affichée.</p>
+
+  <form id="pg" novalidate>
+    <label for="key">Clé API <small>(<a href="/cle">demander une clé</a>)</small></label>
+    <input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="am_xxxxxxxx_…">
+
+    <label for="endpoint">Endpoint</label>
+    <select id="endpoint"></select>
+    <p id="desc" class="muted"></p>
+
+    <div id="preset-wrap" hidden>
+      <label for="preset">Ville</label>
+      <select id="preset"></select>
+    </div>
+    <div id="params"></div>
+
+    <div class="actions"><button class="btn" id="send" type="submit">Envoyer la requête</button></div>
+  </form>
+
+  <div id="out" hidden>
+    <h2>Requête</h2>
+    <p class="muted">URL finale</p>
+    <pre id="url"></pre>
+    <p class="muted">cURL <button class="btn secondary" id="copy" type="button">Copier</button></p>
+    <pre id="curl"></pre>
+
+    <h2>Réponse</h2>
+    <p id="meta"></p>
+    <pre id="json"></pre>
+  </div>
+</main>
+
+<footer class="site"><div class="wrap">Source : Météo-France (données retraitées par Alertes-Meteo, service non officiel).</div></footer>
+<script src="/assets/playground.js"></script>
+</body>
+</html>
