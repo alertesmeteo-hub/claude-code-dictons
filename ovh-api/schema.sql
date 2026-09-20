@@ -116,3 +116,20 @@ CREATE TABLE IF NOT EXISTS sync_logs (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_tache_date (tache, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Bulletins de l'archive officielle Météo-France (vigilance-public.meteo.fr, 2001 → ~2022). Référence uniquement :
+-- la table est créée automatiquement par l'API (assurerTableVigilanceBulletins) au premier appel.
+-- masque : 1 vent, 2 pluie-inondation, 4 orages, 8 crues, 16 neige-verglas, 32 canicule, 64 grand froid, 128 avalanches, 256 vagues-submersion.
+CREATE TABLE IF NOT EXISTS vigilance_bulletin (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  date DATE NOT NULL,
+  heure TIME NOT NULL,
+  producteur VARCHAR(20) NOT NULL,
+  phenomenes VARCHAR(160) NOT NULL,
+  masque SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  bulletin_id INT NOT NULL,
+  base VARCHAR(30) NOT NULL,
+  fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_base_bulletin (base, bulletin_id),
+  KEY idx_date_masque (date, masque)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

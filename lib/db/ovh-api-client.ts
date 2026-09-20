@@ -108,6 +108,32 @@ export interface VigilanceDepartementJourApi {
   couleur: 1 | 2 | 3 | 4;
 }
 
+export interface VigilanceBulletinApi {
+  date: string;
+  heure: string;
+  producteur: string;
+  phenomenes: string;
+  masque: number;
+  bulletinId: number;
+  base: string;
+}
+
+export interface VigilanceRechercheJourApi {
+  date: string;
+  couleur: number;
+  masque: number;
+  nbBulletins: number;
+}
+
+export interface VigilanceRechercheParams {
+  debut: string;
+  fin: string;
+  /** '' = orange et rouge ; '2' jaune, '3' orange, '4' rouge. */
+  couleur?: '' | '2' | '3' | '4';
+  /** '' = tous ; '1' à '9' = un phénomène. */
+  phenomene?: string;
+}
+
 export interface FeteJourApi {
   prenoms: string[];
   autresFetes: { nom: string; description: string | null; url: string }[];
@@ -174,6 +200,17 @@ export const ovhApi = {
 
   vigilanceDepartementMois: (departement: string, annee: number, mois: number) =>
     appelerApi<VigilanceDepartementJourApi[]>(`vigilance/departement-historique&departement=${departement}&annee=${annee}&mois=${mois}`),
+
+  vigilanceBulletinsEnregistrer: (bulletins: VigilanceBulletinApi[]) =>
+    appelerApi<{ ok: true; compte: number }>('vigilance/bulletins', { method: 'POST', body: JSON.stringify({ bulletins }) }),
+
+  vigilanceBulletinsJour: (date: string) =>
+    appelerApi<VigilanceBulletinApi[]>(`vigilance/bulletins-jour&date=${date}`),
+
+  vigilanceRecherche: (p: VigilanceRechercheParams) =>
+    appelerApi<{ jours: VigilanceRechercheJourApi[]; tronque: boolean }>(
+      `vigilance/recherche&debut=${p.debut}&fin=${p.fin}&couleur=${p.couleur ?? ''}&phenomene=${p.phenomene ?? ''}`,
+    ),
 
   syncLogsListe: (limite = 20) => appelerApi<SyncLogApi[]>(`sync-logs&limite=${limite}`),
 

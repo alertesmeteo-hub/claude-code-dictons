@@ -106,6 +106,27 @@ function assurerTablesVigilance($db) {
 	);
 }
 
+// Bulletins de vigilance de l'archive officielle (vigilance-public.meteo.fr, 2001+ → ~2022) : un enregistrement par bulletin.
+// `masque` = OU binaire des phénomènes (1 vent, 2 pluie-inondation, 4 orages, 8 crues, 16 neige-verglas, 32 canicule,
+// 64 grand froid, 128 avalanches, 256 vagues-submersion). Table créée automatiquement au premier appel.
+function assurerTableVigilanceBulletins($db) {
+	$db->query(
+		'CREATE TABLE IF NOT EXISTS vigilance_bulletin (
+			id INT AUTO_INCREMENT PRIMARY KEY,
+			date DATE NOT NULL,
+			heure TIME NOT NULL,
+			producteur VARCHAR(20) NOT NULL,
+			phenomenes VARCHAR(160) NOT NULL,
+			masque SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+			bulletin_id INT NOT NULL,
+			base VARCHAR(30) NOT NULL,
+			fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE KEY uniq_base_bulletin (base, bulletin_id),
+			KEY idx_date_masque (date, masque)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+	);
+}
+
 $route = $_GET['route'] ?? '';
 $methode = $_SERVER['REQUEST_METHOD'];
 $db = getDb();
@@ -438,6 +459,62 @@ switch ("$methode:$route") {
 			$compte++;
 		}
 		repondre(['ok' => true, 'compte' => $compte]);
+
+	// ---- Bulletins de l'archive officielle + recherche avancée (voir backfill-vigilance-bulletins.ts) ----
+	case 'POST:vigilance/bulletins':
+		assurerTableVigilanceBulletins($db);
+		$d = corpsJson();
+		$compte = 0;
+		$stmt = $db->prepare(
+			'INSERT INTO vigilance_bulletin (date, heure, producteur, phenomenes, masque, bulletin_id, base) VALUES (?, ?, ?, ?, ?, ?, ?)
+			 ON DUPLICATE KEY UPDATE date=VALUES(date), heure=VALUES(heure), producteur=VALUES(producteur),
+			   phenomenes=VALUES(phenomenes), masque=VALUES(masque), fetched_at=CURRENT_TIMESTAMP'
+		);
+		foreach (($d['bulletins'] ?? []) as $b) {
+			$stmt->bind_param('ssssiis', $b['date'], $b['heure'], $b['producteur'], $b['phenomenes'], $b['masque'], $b['bulletinId'], $b['base']);
+			$stmt->execute();
+			$compte++;
+		}
+		repondre(['ok' => true, 'compte' => $compte]);
+
+	case 'GET:vigilance/bulletins-jour':
+		assurerTableVigilanceBulletins($db);
+		$date = $_GET['date'] ?? '';
+		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) repondre(['erreur' => 'date requise (AAAA-MM-JJ)'], 400);
+		$stmt = $db->prepare(
+			'SELECT date, heure, producteur, phenomenes, masque, bulletin_id AS bulletinId, base
+			 FROM vigilance_bulletin WHERE date = ? ORDER BY heure ASC, id ASC'
+		);
+		$stmt->bind_param('s', $date);
+		$stmt->execute();
+		repondre($stmt->get_result()->fetch_all(MYSQLI_ASSOC));
+
+	// Jours de la période dont la couleur nationale correspond, éventuellement restreints à un phénomène (1 à 9).
+	// couleur : '' = orange et rouge ; 2 jaune, 3 orange, 4 rouge (exact). Plafond : 5000 jours par réponse.
+	case 'GET:vigilance/recherche':
+		assurerTableVigilanceBulletins($db);
+		$debut = $_GET['debut'] ?? '';
+		$fin = $_GET['fin'] ?? '';
+		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $debut) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fin) || $debut > $fin) {
+			repondre(['erreur' => 'debut et fin requis (AAAA-MM-JJ, debut <= fin)'], 400);
+		}
+		$couleur = $_GET['couleur'] ?? '';
+		if ($couleur !== '' && !in_array($couleur, ['2', '3', '4'], true)) repondre(['erreur' => 'couleur invalide'], 400);
+		$phenomene = $_GET['phenomene'] ?? '';
+		if ($phenomene !== '' && !preg_match('/^[1-9]$/', $phenomene)) repondre(['erreur' => 'phenomene invalide (1 a 9)'], 400);
+		$filtreCouleur = $couleur === '' ? 'n.couleur >= 3' : 'n.couleur = ' . (int)$couleur;
+		$having = $phenomene === '' ? '' : 'HAVING (masque & ' . (1 << ((int)$phenomene - 1)) . ') > 0';
+		$sql = "SELECT n.date, n.couleur, COALESCE(BIT_OR(b.masque), 0) AS masque, COUNT(b.id) AS nbBulletins
+			FROM vigilance_national_jour n LEFT JOIN vigilance_bulletin b ON b.date = n.date
+			WHERE n.date BETWEEN ? AND ? AND $filtreCouleur
+			GROUP BY n.date, n.couleur $having ORDER BY n.date ASC LIMIT 5001";
+		$stmt = $db->prepare($sql);
+		$stmt->bind_param('ss', $debut, $fin);
+		$stmt->execute();
+		$lignes = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+		$tronque = count($lignes) > 5000;
+		if ($tronque) array_pop($lignes);
+		repondre(['jours' => $lignes, 'tronque' => $tronque]);
 
 	// ---- Journal des tâches ----
 	case 'GET:sync-logs':
