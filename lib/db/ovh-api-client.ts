@@ -250,6 +250,9 @@ export const ovhApi = {
   vigilanceBulletinsTextesEnregistrer: (textes: VigilanceBulletinTexteApi[]) =>
     appelerApi<{ ok: true; compte: number }>('vigilance/bulletins-textes', { method: 'POST', body: JSON.stringify({ textes }) }),
 
+  vigilanceTextesRecentsEnregistrer: (textes: { date: string; heure: string; texte: string }[]) =>
+    appelerApi<{ ok: true; compte: number }>('vigilance/textes-recents', { method: 'POST', body: JSON.stringify({ textes }) }),
+
   vigilanceBulletin: (base: string, id: number) =>
     appelerApi<VigilanceBulletinCompletApi>(`vigilance/bulletin&base=${base}&id=${id}`),
 

@@ -142,6 +142,19 @@ function assurerTablePhenomenesJour($db) {
 	);
 }
 
+// Texte des bulletins récents (data.gouv, 2022+), lisible et compressé, indexé par date et heure du bulletin.
+function assurerTableTextesRecents($db) {
+	$db->query(
+		'CREATE TABLE IF NOT EXISTS vigilance_texte_recent (
+			date DATE NOT NULL,
+			heure TIME NOT NULL,
+			contenu MEDIUMBLOB NOT NULL,
+			fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (date, heure)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+	);
+}
+
 // Texte intégral des bulletins (compressé : environ 3 fois moins de place) et départements suivis, avec leur statut
 // (1 début de suivi, 2 maintien, 3 fin). Tables créées automatiquement au premier appel.
 function assurerTablesVigilanceTextes($db) {
@@ -750,6 +763,22 @@ switch ("$methode:$route") {
 		}
 		repondre(['ok' => true, 'compte' => $compte]);
 
+	// Texte lisible des bulletins récents : [{date, heure, texte}].
+	case 'POST:vigilance/textes-recents':
+		assurerTableTextesRecents($db);
+		$d = corpsJson();
+		$compte = 0;
+		$stmt = $db->prepare(
+			'INSERT INTO vigilance_texte_recent (date, heure, contenu) VALUES (?, ?, COMPRESS(?))
+			 ON DUPLICATE KEY UPDATE contenu=VALUES(contenu), fetched_at=CURRENT_TIMESTAMP'
+		);
+		foreach (($d['textes'] ?? []) as $t) {
+			$stmt->bind_param('sss', $t['date'], $t['heure'], $t['texte']);
+			$stmt->execute();
+			$compte++;
+		}
+		repondre(['ok' => true, 'compte' => $compte]);
+
 	// Un bulletin complet (texte décompressé + départements suivis) pour l'afficher sur le site.
 	case 'GET:vigilance/bulletin':
 		assurerTablesVigilanceTextes($db);
@@ -767,9 +796,14 @@ switch ("$methode:$route") {
 			$stmt->execute();
 			$carte = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 			if (!$carte) repondre(['erreur' => 'bulletin inconnu'], 404);
+			assurerTableTextesRecents($db);
+			$stmt = $db->prepare('SELECT UNCOMPRESS(contenu) AS texte FROM vigilance_texte_recent WHERE date = ? AND heure = ?');
+			$stmt->bind_param('ss', $date, $heure);
+			$stmt->execute();
+			$t = $stmt->get_result()->fetch_assoc();
 			repondre([
 				'date' => $date, 'heure' => $heure, 'producteur' => 'Carte', 'phenomenes' => 'Carte de vigilance',
-				'masque' => 0, 'texte' => null, 'niveauMax' => (int)max(array_column($carte, 'couleur')),
+				'masque' => 0, 'texte' => $t['texte'] ?? null, 'niveauMax' => (int)max(array_column($carte, 'couleur')),
 				'departements' => [], 'carte' => $carte,
 			]);
 		}

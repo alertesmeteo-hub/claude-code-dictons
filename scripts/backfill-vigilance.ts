@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { ovhApi } from '../lib/db/ovh-api-client';
 import { parseCarteVigilance, parsePhenomenesCarte } from '../lib/meteo/vigilance';
+import { texteDepuisCdpTextes } from '../lib/meteo/vigilance-texte-recent';
 
 /**
  * Import ponctuel (à lancer manuellement, pas planifié) de l'historique des bulletins de vigilance
@@ -9,7 +10,8 @@ import { parseCarteVigilance, parsePhenomenesCarte } from '../lib/meteo/vigilanc
  * Source : https://files.data.gouv.fr/meteofrance/data/vigilance/metropole/AAAA/MM/JJ/HHMMSS/
  * Un dossier par bulletin publié (plusieurs par jour : ~6h, 16h, réévaluations en cours d'événement),
  * contenant CDP_CARTE_EXTERNE.json — même format que l'API temps réel (DPVigilance /cartevigilance/encours).
- * Pas de texte de synthèse dans cette archive (seulement un PDF de carte, non exploité ici).
+ * Chaque dossier contient aussi CDP_TEXTES_VIGILANCE.json (texte du bulletin : national, zones, départements),
+ * converti en texte lisible et stocké (date + heure) pour la page du bulletin.
  *
  * Usage :
  *   npm run backfill:vigilance -- --depuis=2022-01-01 --jusqu-a=2022-12-31
@@ -84,6 +86,20 @@ type MaxJour = Map<string, number>;
 /** Couleur maximale du jour (échéance J) par « département|phénomène ». */
 type MaxPhenomenes = Map<string, number>;
 
+/** Texte du bulletin (absent pour certains bulletins anciens : ignoré sans erreur). */
+async function enregistrerTexte(date: string, hhmmss: string): Promise<void> {
+  const brut = await get(`${BASE}/${date.replace(/-/g, '/')}/${hhmmss}/CDP_TEXTES_VIGILANCE.json`);
+  if (!brut) return;
+  let texte: string;
+  try {
+    texte = texteDepuisCdpTextes(brut);
+  } catch {
+    return; // fichier illisible : la carte reste importée, sans texte
+  }
+  if (!texte) return;
+  await ovhApi.vigilanceTextesRecentsEnregistrer([{ date, heure: `${hhmmss.slice(0, 2)}:${hhmmss.slice(2, 4)}:${hhmmss.slice(4, 6)}`, texte }]);
+}
+
 async function traiterBulletin(date: string, hhmmss: string, maxJour: MaxJour, maxPhen: MaxPhenomenes): Promise<'ok' | 'ignore'> {
   const url = `${BASE}/${date.replace(/-/g, '/')}/${hhmmss}/CDP_CARTE_EXTERNE.json`;
   const brut = await get(url);
@@ -92,6 +108,7 @@ async function traiterBulletin(date: string, hhmmss: string, maxJour: MaxJour, m
   const carte = parseCarteVigilance(brut);
   const heure = `${hhmmss.slice(0, 2)}:${hhmmss.slice(2, 4)}:${hhmmss.slice(4, 6)}`;
   await ovhApi.vigilanceEnregistrer(date, heure, carte, null);
+  await enregistrerTexte(date, hhmmss);
   for (const p of parsePhenomenesCarte(brut)) {
     if (p.echeance !== 'J') continue;
     const cle = `${p.departement}|${p.phenomene}`;
