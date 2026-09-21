@@ -79,7 +79,10 @@ function* joursEntre(depuis: string, jusquA: string): Generator<string> {
   }
 }
 
-async function traiterBulletin(date: string, hhmmss: string): Promise<'ok' | 'ignore'> {
+/** Couleur maximale du jour (échéance J) par département, cumulée sur les bulletins de la journée. */
+type MaxJour = Map<string, number>;
+
+async function traiterBulletin(date: string, hhmmss: string, maxJour: MaxJour): Promise<'ok' | 'ignore'> {
   const url = `${BASE}/${date.replace(/-/g, '/')}/${hhmmss}/CDP_CARTE_EXTERNE.json`;
   const brut = await get(url);
   if (!brut) return 'ignore';
@@ -87,6 +90,7 @@ async function traiterBulletin(date: string, hhmmss: string): Promise<'ok' | 'ig
   const carte = parseCarteVigilance(brut);
   const heure = `${hhmmss.slice(0, 2)}:${hhmmss.slice(2, 4)}:${hhmmss.slice(4, 6)}`;
   await ovhApi.vigilanceEnregistrer(date, heure, carte, null);
+  for (const c of carte) if (c.echeance === 'J') maxJour.set(c.departement, Math.max(maxJour.get(c.departement) ?? 0, c.couleur));
   return 'ok';
 }
 
@@ -113,15 +117,24 @@ async function main() {
       if (bulletins.length === 0) {
         console.warn(`${date} : page trouvée mais aucun bulletin détecté (format de listing inattendu ?)`);
       }
+      const maxJour: MaxJour = new Map();
       for (const hhmmss of bulletins) {
         try {
-          const resultat = await traiterBulletin(date, hhmmss);
+          const resultat = await traiterBulletin(date, hhmmss, maxJour);
           if (resultat === 'ok') bulletinsImportes++;
         } catch (e) {
           echecs++;
           console.error(`${date} ${hhmmss} en échec :`, e instanceof Error ? e.message : e);
         }
         await pause(PAUSE_ENTRE_APPELS_MS);
+      }
+      if (maxJour.size > 0) {
+        // Alimente les calendriers du site (national et par département) : couleur max du jour.
+        const national = Math.max(...maxJour.values());
+        await ovhApi.vigilanceNationalEnregistrer([{ date, couleur: national as 1 | 2 | 3 | 4, commentaire: null }]);
+        await ovhApi.vigilanceDepartementHistoriqueEnregistrer(
+          [...maxJour].map(([departement, couleur]) => ({ date, departement, couleur: couleur as 1 | 2 | 3 | 4 })),
+        );
       }
       joursTraites++;
       if (joursTraites % 30 === 0) console.log(`… ${date} (${joursTraites} jours traités, ${bulletinsImportes} bulletins importés)`);

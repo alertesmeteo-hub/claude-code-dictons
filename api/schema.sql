@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE IF NOT EXISTS am_users (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   email VARCHAR(190) NOT NULL UNIQUE,
   plan VARCHAR(20) NOT NULL DEFAULT 'free',
@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
   created_at DATETIME NOT NULL
 ) ENGINE=InnoDB;
 
-CREATE TABLE IF NOT EXISTS api_keys (
+CREATE TABLE IF NOT EXISTS am_api_keys (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id INT UNSIGNED NOT NULL,
   prefix CHAR(8) NOT NULL UNIQUE,
@@ -14,12 +14,12 @@ CREATE TABLE IF NOT EXISTS api_keys (
   revoked_at DATETIME NULL,
   expires_at DATETIME NOT NULL,
   created_at DATETIME NOT NULL,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  FOREIGN KEY (user_id) REFERENCES am_users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- Compteurs agreges : pas de log par requete, pas d'IP, pas de coordonnees (RGPD).
 -- bucket : 'm202609201530' (minute), 'd20260920' (jour), 'M202609' (mois)
-CREATE TABLE IF NOT EXISTS usage_counters (
+CREATE TABLE IF NOT EXISTS am_usage_counters (
   key_id INT UNSIGNED NOT NULL,
   bucket CHAR(13) NOT NULL,
   endpoint VARCHAR(40) NOT NULL DEFAULT '*',
@@ -27,14 +27,14 @@ CREATE TABLE IF NOT EXISTS usage_counters (
   PRIMARY KEY (key_id, bucket, endpoint)
 ) ENGINE=InnoDB;
 
-CREATE TABLE IF NOT EXISTS plans (
+CREATE TABLE IF NOT EXISTS am_plans (
   code VARCHAR(20) PRIMARY KEY,
   per_minute INT UNSIGNED NOT NULL,
   per_month INT UNSIGNED NOT NULL
 ) ENGINE=InnoDB;
-INSERT IGNORE INTO plans VALUES ('free', 30, 10000);
+INSERT IGNORE INTO am_plans VALUES ('free', 30, 10000);
 
-CREATE TABLE IF NOT EXISTS signup_throttle (
+CREATE TABLE IF NOT EXISTS am_signup_throttle (
   ip_hash CHAR(64) NOT NULL,
   day CHAR(8) NOT NULL,
   n INT UNSIGNED NOT NULL DEFAULT 0,
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS signup_throttle (
 ) ENGINE=InnoDB;
 
 -- Extremes du jour par station (collecteur cron/collect_extremes.php)
-CREATE TABLE IF NOT EXISTS station_daily (
+CREATE TABLE IF NOT EXISTS am_station_daily (
   day DATE NOT NULL,
   station_id CHAR(8) NOT NULL,
   name VARCHAR(80) NOT NULL,
@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS station_daily (
   KEY idx_alt (day, altitude_m)
 ) ENGINE=InnoDB;
 
-CREATE TABLE IF NOT EXISTS collector_runs (
+CREATE TABLE IF NOT EXISTS am_collector_runs (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(40) NOT NULL,
   status ENUM('ok','error') NOT NULL,
@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS collector_runs (
 ) ENGINE=InnoDB;
 
 -- Demandes de cle : validation manuelle (cron/admin.php)
-CREATE TABLE IF NOT EXISTS key_requests (
+CREATE TABLE IF NOT EXISTS am_key_requests (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
   organization VARCHAR(100) NULL,
@@ -84,13 +84,13 @@ CREATE TABLE IF NOT EXISTS key_requests (
 ) ENGINE=InnoDB;
 
 -- Vigilance : instantane unique remplace a chaque nouveau produit (cron/collect_vigilance.php)
-CREATE TABLE IF NOT EXISTS vigilance_snapshot (
+CREATE TABLE IF NOT EXISTS am_vigilance_snapshot (
   id TINYINT UNSIGNED PRIMARY KEY,
   product_datetime DATETIME NOT NULL,   -- UTC, date du produit source
   fetched_at DATETIME NOT NULL          -- UTC, derniere verification reussie
 ) ENGINE=InnoDB;
 
-CREATE TABLE IF NOT EXISTS vigilance_items (
+CREATE TABLE IF NOT EXISTS am_vigilance_items (
   echeance VARCHAR(4) NOT NULL,         -- J, J1
   domain_id VARCHAR(4) NOT NULL,        -- departement (2 car.) ou zone cotiere (departement + 10)
   phenomenon_id TINYINT UNSIGNED NOT NULL,
@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS vigilance_items (
 ) ENGINE=InnoDB;
 
 -- Records de temperature calcules (cron/collect_records.php) : jamais des records officiels
-CREATE TABLE IF NOT EXISTS records_snapshot (
+CREATE TABLE IF NOT EXISTS am_records_snapshot (
   id TINYINT UNSIGNED PRIMARY KEY,
   day DATE NOT NULL,
   generated_at DATETIME NOT NULL,          -- UTC, generation du fichier source
@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS records_snapshot (
   fetched_at DATETIME NOT NULL
 ) ENGINE=InnoDB;
 
-CREATE TABLE IF NOT EXISTS records_events (
+CREATE TABLE IF NOT EXISTS am_records_events (
   kind ENUM('heat','cold','tropical') NOT NULL,
   station_id CHAR(8) NOT NULL,
   name VARCHAR(80) NOT NULL,
@@ -130,7 +130,7 @@ CREATE TABLE IF NOT EXISTS records_events (
 ) ENGINE=InnoDB;
 
 -- Pluie observee, metropole (cron/collect_rain.php)
-CREATE TABLE IF NOT EXISTS rain_snapshot (
+CREATE TABLE IF NOT EXISTS am_rain_snapshot (
   id TINYINT UNSIGNED PRIMARY KEY,
   generated_at DATETIME NOT NULL,          -- UTC, generation du fichier source
   latest_observation_at DATETIME NULL,     -- UTC
@@ -138,7 +138,7 @@ CREATE TABLE IF NOT EXISTS rain_snapshot (
   fetched_at DATETIME NOT NULL
 ) ENGINE=InnoDB;
 
-CREATE TABLE IF NOT EXISTS rain_stations (
+CREATE TABLE IF NOT EXISTS am_rain_stations (
   station_id CHAR(8) NOT NULL PRIMARY KEY,
   name VARCHAR(80) NOT NULL,
   department CHAR(2) NOT NULL,
@@ -158,7 +158,7 @@ CREATE TABLE IF NOT EXISTS rain_stations (
 ) ENGINE=InnoDB;
 
 -- Interrupteurs d'urgence : nom d'endpoint (sun, rain...) ou 'collector:<nom>'
-CREATE TABLE IF NOT EXISTS kill_switch (
+CREATE TABLE IF NOT EXISTS am_kill_switch (
   name VARCHAR(40) NOT NULL PRIMARY KEY,
   disabled TINYINT(1) NOT NULL DEFAULT 0,
   reason VARCHAR(190) NULL,
@@ -166,7 +166,7 @@ CREATE TABLE IF NOT EXISTS kill_switch (
 ) ENGINE=InnoDB;
 
 -- Echecs d'authentification admin (protection contre la force brute), par IP hachee et par heure
-CREATE TABLE IF NOT EXISTS admin_failures (
+CREATE TABLE IF NOT EXISTS am_admin_failures (
   ip_hash CHAR(64) NOT NULL,
   hour CHAR(10) NOT NULL,
   n INT UNSIGNED NOT NULL DEFAULT 0,

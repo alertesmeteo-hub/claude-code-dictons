@@ -60,13 +60,13 @@ try {
     }
 
     if ($path === '/v1/status' && $method === 'GET') {
-        $limits = ['extremes' => 3 * 3600, 'vigilance' => 45 * 60, 'records' => 3 * 3600, 'rain' => 90 * 60]; // age max avant de considerer une source en retard
-        $st = App::db()->prepare("SELECT status, message, finished_at FROM collector_runs WHERE name = ? ORDER BY finished_at DESC LIMIT 1");
+        $limits = ['extremes' => 3 * 3600, 'vigilance' => 90 * 60, 'records' => 3 * 3600, 'rain' => 120 * 60]; // age max avant de considerer une source en retard
+        $st = App::db()->prepare("SELECT status, message, finished_at FROM am_collector_runs WHERE name = ? ORDER BY finished_at DESC LIMIT 1");
         $sources = [];
         foreach ($limits as $name => $max) {
             $st->execute([$name]);
             $last = $st->fetch();
-            $okAt = App::db()->prepare("SELECT MAX(finished_at) FROM collector_runs WHERE name = ? AND status = 'ok'");
+            $okAt = App::db()->prepare("SELECT MAX(finished_at) FROM am_collector_runs WHERE name = ? AND status = 'ok'");
             $okAt->execute([$name]);
             $ok = $okAt->fetchColumn();
             $age = $ok ? time() - strtotime($ok . ' UTC') : null;
@@ -103,7 +103,7 @@ try {
         $offset = $offset ?: 0;
 
         $db = App::db();
-        $snap = $db->query('SELECT day, generated_at, latest_observation_at, departments_ok, departments_total, fetched_at FROM records_snapshot WHERE id = 1')->fetch();
+        $snap = $db->query('SELECT day, generated_at, latest_observation_at, departments_ok, departments_total, fetched_at FROM am_records_snapshot WHERE id = 1')->fetch();
         if (!$snap) {
             App::error(503, 'no_data', 'Aucune donnee de records disponible.');
         }
@@ -112,10 +112,10 @@ try {
         if ($kind !== null) { $where .= ' AND kind = ?'; $args[] = $kind; }
         if ($scope !== null) { $where .= ' AND is_' . $scope . ' = 1'; }
         if ($dep !== null) { $where .= ' AND department = ?'; $args[] = $dep; }
-        $count = $db->prepare("SELECT COUNT(*) FROM records_events WHERE $where");
+        $count = $db->prepare("SELECT COUNT(*) FROM am_records_events WHERE $where");
         $count->execute($args);
         $total = (int) $count->fetchColumn();
-        $st = $db->prepare("SELECT * FROM records_events WHERE $where ORDER BY kind, CASE WHEN kind = 'cold' THEN value ELSE -value END, station_id LIMIT $limit OFFSET $offset");
+        $st = $db->prepare("SELECT * FROM am_records_events WHERE $where ORDER BY kind, CASE WHEN kind = 'cold' THEN value ELSE -value END, station_id LIMIT $limit OFFSET $offset");
         $st->execute($args);
         $items = [];
         foreach ($st->fetchAll() as $r) {
@@ -168,7 +168,7 @@ try {
         $offset = $offset ?: 0;
 
         $db = App::db();
-        $snap = $db->query('SELECT generated_at, latest_observation_at, stations, fetched_at FROM rain_snapshot WHERE id = 1')->fetch();
+        $snap = $db->query('SELECT generated_at, latest_observation_at, stations, fetched_at FROM am_rain_snapshot WHERE id = 1')->fetch();
         if (!$snap) {
             App::error(503, 'no_data', 'Aucune donnee de pluie disponible.');
         }
@@ -178,10 +178,10 @@ try {
         if ($dep !== null) { $where .= ' AND department = ?'; $args[] = $dep; }
         if ($station !== null) { $where .= ' AND station_id = ?'; $args[] = $station; }
         if ($completeOnly && $completeCol !== null) { $where .= " AND $completeCol = 1"; }
-        $count = $db->prepare("SELECT COUNT(*) FROM rain_stations WHERE $where");
+        $count = $db->prepare("SELECT COUNT(*) FROM am_rain_stations WHERE $where");
         $count->execute($args);
         $total = (int) $count->fetchColumn();
-        $st = $db->prepare("SELECT * FROM rain_stations WHERE $where ORDER BY $col DESC, station_id LIMIT $limit OFFSET $offset");
+        $st = $db->prepare("SELECT * FROM am_rain_stations WHERE $where ORDER BY $col DESC, station_id LIMIT $limit OFFSET $offset");
         $st->execute($args);
         $f = static fn($v) => $v === null ? null : (float) $v;
         $b = static fn($v) => $v === null ? null : (bool) $v;
@@ -207,7 +207,7 @@ try {
             'generated_at' => gmdate('c', strtotime($snap['generated_at'] . ' UTC')),
             'latest_observation_at' => $snap['latest_observation_at'] ? gmdate('c', strtotime($snap['latest_observation_at'] . ' UTC')) : null,
             'updated_at' => gmdate('c', strtotime($snap['fetched_at'] . ' UTC')),
-            'stale' => $age > 90 * 60,
+            'stale' => $age > 120 * 60,
             'scope' => 'metropole',
             'stations_in_dataset' => (int) $snap['stations'],
             'filters' => ['sort' => $sort, 'department' => $dep, 'station' => $station, 'complete_only' => $completeOnly],
@@ -245,20 +245,20 @@ try {
         $db = App::db();
         $ipHash = hash('sha256', App::env('IP_SALT') . ($_SERVER['REMOTE_ADDR'] ?? ''));
         $day = gmdate('Ymd');
-        $db->prepare('INSERT INTO signup_throttle (ip_hash, day, n) VALUES (?, ?, 1) ON DUPLICATE KEY UPDATE n = n + 1')->execute([$ipHash, $day]);
-        $n = $db->prepare('SELECT n FROM signup_throttle WHERE ip_hash = ? AND day = ?');
+        $db->prepare('INSERT INTO am_signup_throttle (ip_hash, day, n) VALUES (?, ?, 1) ON DUPLICATE KEY UPDATE n = n + 1')->execute([$ipHash, $day]);
+        $n = $db->prepare('SELECT n FROM am_signup_throttle WHERE ip_hash = ? AND day = ?');
         $n->execute([$ipHash, $day]);
         if ((int) $n->fetchColumn() > 5) {
             App::error(429, 'too_many_requests', 'Trop de demandes aujourd\'hui.');
         }
-        $db->prepare('INSERT INTO key_requests (name, organization, email, website, usage_description, created_at) VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP())')
+        $db->prepare('INSERT INTO am_key_requests (name, organization, email, website, usage_description, created_at) VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP())')
             ->execute([$name, $org ?: null, $email, $site ?: null, $usage]);
         $accepted();
     }
 
     if ($path === '/v1/keys' && $method === 'DELETE') {
         $id = Auth::guard('keys');
-        App::db()->prepare('UPDATE api_keys SET revoked_at = UTC_TIMESTAMP() WHERE id = ?')->execute([$id]);
+        App::db()->prepare('UPDATE am_api_keys SET revoked_at = UTC_TIMESTAMP() WHERE id = ?')->execute([$id]);
         App::ok(['revoked' => true]);
     }
 
@@ -266,14 +266,14 @@ try {
         $id = Auth::guard('usage');
         $db = App::db();
         $k = $db->prepare('SELECT k.prefix, k.expires_at, u.plan, p.per_minute, p.per_month
-            FROM api_keys k JOIN users u ON u.id = k.user_id JOIN plans p ON p.code = u.plan WHERE k.id = ?');
+            FROM am_api_keys k JOIN am_users u ON u.id = k.user_id JOIN am_plans p ON p.code = u.plan WHERE k.id = ?');
         $k->execute([$id]);
         $key = $k->fetch();
-        $used = $db->prepare("SELECT bucket, hits FROM usage_counters WHERE key_id = ? AND endpoint = '*' AND bucket IN (?, ?)");
+        $used = $db->prepare("SELECT bucket, hits FROM am_usage_counters WHERE key_id = ? AND endpoint = '*' AND bucket IN (?, ?)");
         $used->execute([$id, 'm' . gmdate('YmdHi'), 'M' . gmdate('Ym')]);
         $u = array_column($used->fetchAll(), 'hits', 'bucket');
         $since = 'd' . gmdate('Ymd', time() - 29 * 86400);
-        $d = $db->prepare("SELECT bucket, endpoint, hits FROM usage_counters WHERE key_id = ? AND bucket LIKE 'd%' AND bucket >= ? ORDER BY bucket DESC LIMIT 500");
+        $d = $db->prepare("SELECT bucket, endpoint, hits FROM am_usage_counters WHERE key_id = ? AND bucket LIKE 'd%' AND bucket >= ? ORDER BY bucket DESC LIMIT 500");
         $d->execute([$id, $since]);
         $days = [];
         foreach ($d->fetchAll() as $r) {
@@ -335,7 +335,7 @@ try {
         if ($network === 'principales') { $where .= ' AND principal = 1'; }
 
         $pick = function (string $col, string $atCol, string $order) use ($db, $where, $args): ?array {
-            $st = $db->prepare("SELECT station_id, name, department, altitude_m, $col AS v, $atCol AS at FROM station_daily
+            $st = $db->prepare("SELECT station_id, name, department, altitude_m, $col AS v, $atCol AS at FROM am_station_daily
                 WHERE $where AND $col IS NOT NULL ORDER BY $col $order LIMIT 1");
             $st->execute($args);
             $r = $st->fetch();
@@ -346,10 +346,10 @@ try {
         if ($max === null) {
             App::error(503, 'no_fresh_data', 'Aucune donnee recente pour ce filtre.');
         }
-        $cnt = $db->prepare("SELECT COUNT(*) n, MAX(updated_at) u FROM station_daily WHERE $where");
+        $cnt = $db->prepare("SELECT COUNT(*) n, MAX(updated_at) u FROM am_station_daily WHERE $where");
         $cnt->execute($args);
         $c = $cnt->fetch();
-        $run = $db->query("SELECT departments_ok, departments_total, finished_at FROM collector_runs WHERE name='extremes' AND status='ok' ORDER BY finished_at DESC LIMIT 1")->fetch();
+        $run = $db->query("SELECT departments_ok, departments_total, finished_at FROM am_collector_runs WHERE name='extremes' AND status='ok' ORDER BY finished_at DESC LIMIT 1")->fetch();
         $updated = gmdate('c', strtotime($c['u'] . ' UTC'));
         $complete = $run && $run['departments_ok'] === $run['departments_total'];
         App::ok(['day' => $day, 'max' => $max, 'min' => $pick('tmin', 'tmin_at', 'ASC')], [
@@ -380,11 +380,11 @@ try {
         $minLevel = $minLevel ?: 2;
 
         $db = App::db();
-        $snap = $db->query('SELECT product_datetime, fetched_at FROM vigilance_snapshot WHERE id = 1')->fetch();
+        $snap = $db->query('SELECT product_datetime, fetched_at FROM am_vigilance_snapshot WHERE id = 1')->fetch();
         if (!$snap) {
             App::error(503, 'no_data', 'Aucune donnee de vigilance disponible.');
         }
-        $sql = 'SELECT echeance, domain_id, phenomenon_id, color_id, begin_time, end_time FROM vigilance_items WHERE color_id >= ?';
+        $sql = 'SELECT echeance, domain_id, phenomenon_id, color_id, begin_time, end_time FROM am_vigilance_items WHERE color_id >= ?';
         $args = [$minLevel];
         if ($domain !== null) {
             $sql .= strlen((string) $domain) === 4 ? ' AND domain_id = ?' : ' AND domain_id IN (?, ?)';
@@ -420,7 +420,7 @@ try {
             'source' => 'Meteo-France, produit DPVigilance, retraite par Alertes-Meteo',
             'product_at' => gmdate('c', strtotime($snap['product_datetime'] . ' UTC')),
             'updated_at' => gmdate('c', strtotime($snap['fetched_at'] . ' UTC')),
-            'stale' => $age > 45 * 60,
+            'stale' => $age > 90 * 60,
             'filters' => ['domain' => $domain, 'echeance' => $ech, 'min_level' => $minLevel],
             'notice' => 'Service non officiel, a titre informatif. Reference : vigilance.meteofrance.fr.',
         ]);

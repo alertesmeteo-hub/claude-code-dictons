@@ -13,7 +13,7 @@ code{font-family:ui-monospace,monospace}
 </style>
 </head>
 <body>
-<p><a href="/">Accueil</a> · <a href="/playground">Playground</a> · <a href="/cle">Demander une cle</a> · <a href="/statut">Statut</a> · <a href="/dashboard">Espace developpeur</a></p>
+<p><a href="/">Accueil</a> · <a href="/playground">Playground</a> · <a href="/cle">Demander une cle</a> · <a href="/statut">Statut</a> · <a href="/dashboard">Espace developpeur</a> · <a href="https://www.alertes-meteo.com" rel="noopener">Alertes-Meteo.com</a></p>
 <h1>API Alertes-Meteo</h1>
 <p>Une API meteo francaise simple a integrer. Format JSON, cle gratuite. <a href="/openapi.yaml">Fichier OpenAPI</a> (compatible Swagger UI).</p>
 
@@ -55,7 +55,8 @@ print(r.json())</pre>
     "sunrise": "2026-06-21T05:47:00+02:00", "solar_noon": "...", "sunset": "...",
     "dawn": "...", "dusk": "...", "day_length_seconds": 58000, "polar": null },
   "meta": { "source": "Calcul local (algorithme NOAA)", "stale": false,
-    "version": "v1", "units": "metric", "generated_at": "..." }
+    "version": "v1", "units": "metric", "generated_at": "...",
+    "attribution": { "text": "Donn&eacute;es fournies par Alertes-Meteo.com", "url": "https://www.alertes-meteo.com" } }
 }</pre>
 <p><strong>Actualisation :</strong> calcul a chaque requete, aucune donnee externe. En zone polaire, les heures sont <code>null</code> et <code>polar</code> vaut <code>day</code> ou <code>night</code>.</p>
 
@@ -83,7 +84,7 @@ print(r.json())</pre>
     "phenomena": [ { "phenomenon_id": 3, "phenomenon": "orages", "level": 3, "color": "orange",
       "begin": "2026-09-20T04:00:00+00:00", "end": "2026-09-20T22:00:00+00:00" } ] } ] } ] },
   "meta": { "source": "...", "product_at": "...", "updated_at": "...", "stale": false } }</pre>
-<p>Une liste <code>periods</code> vide signifie qu'aucune vigilance ne depasse <code>min_level</code>. <code>meta.product_at</code> est la date du produit source, <code>meta.updated_at</code> la derniere verification, et <code>meta.stale</code> passe a <code>true</code> si elle date de plus de 45 minutes. <strong>Actualisation :</strong> verification toutes les 15 minutes.</p>
+<p>Une liste <code>periods</code> vide signifie qu'aucune vigilance ne depasse <code>min_level</code>. <code>meta.product_at</code> est la date du produit source, <code>meta.updated_at</code> la derniere verification, et <code>meta.stale</code> passe a <code>true</code> si elle date de plus de 90 minutes. <strong>Actualisation :</strong> verification toutes les heures.</p>
 
 <h2>5. GET /v1/records</h2>
 <p>Records de temperature du jour, <strong>calcules</strong> par comparaison a l'historique de chaque station. Ils sont provisoires et non officiels : ne les presentez pas comme des records de France.</p>
@@ -95,7 +96,7 @@ print(r.json())</pre>
 <tr><td>limit / offset</td><td>non</td><td>Pagination, 50 par defaut, 200 maximum</td></tr>
 </table>
 <pre>curl "https://api.alertes-meteo.com/v1/records?kind=heat&amp;scope=absolute&amp;limit=10" -H "X-API-Key: VOTRE_CLE"</pre>
-<p>Chaque element donne la station, la temperature en °C, les portees battues (<code>scopes_beaten</code>) et le record precedent avec sa date (<code>previous_records</code>). <code>meta.coverage</code> indique combien de departements ont un historique ; s'il est incomplet, des records peuvent manquer. <strong>Actualisation :</strong> toutes les 30 minutes environ.</p>
+<p>Chaque element donne la station, la temperature en °C, les portees battues (<code>scopes_beaten</code>) et le record precedent avec sa date (<code>previous_records</code>). <code>meta.coverage</code> indique combien de departements ont un historique ; s'il est incomplet, des records peuvent manquer. <strong>Actualisation :</strong> toutes les heures environ.</p>
 
 <h2>6. GET /v1/rain</h2>
 <p>Pluie observee par station en metropole : derniere heure, 24 h, 48 h, 72 h glissantes, mois, saison et annee en cours, avec les normales 1991-2020 quand elles existent. Cumuls provisoires.</p>
@@ -108,7 +109,7 @@ print(r.json())</pre>
 <tr><td>limit / offset</td><td>non</td><td>Pagination, 50 par defaut, 200 maximum</td></tr>
 </table>
 <pre>curl "https://api.alertes-meteo.com/v1/rain?sort=rr24&amp;department=30&amp;complete_only=1" -H "X-API-Key: VOTRE_CLE"</pre>
-<p>Chaque cumul indique <code>complete</code> et, pour 24/48/72 h, <code>hours_covered</code> : un cumul <code>complete: false</code> couvre moins d'heures que la periode annoncee, ne le presentez pas comme complet. <strong>Actualisation :</strong> toutes les 20 minutes environ.</p>
+<p>Chaque cumul indique <code>complete</code> et, pour 24/48/72 h, <code>hours_covered</code> : un cumul <code>complete: false</code> couvre moins d'heures que la periode annoncee, ne le presentez pas comme complet. <strong>Actualisation :</strong> toutes les heures environ ; <code>meta.stale</code> passe a <code>true</code> apres 2 heures sans mise a jour.</p>
 
 <h2>Autres endpoints</h2>
 <ul>
@@ -117,6 +118,15 @@ print(r.json())</pre>
 <li><code>GET /v1/health</code> : etat du service.</li>
 </ul>
 
+<h2>Attribution : un lien vers Alertes-Meteo.com</h2>
+<p>Chaque reponse contient <code>meta.attribution</code> avec un texte et une adresse. Nous vous demandons de l'afficher pres des donnees, sous forme de lien cliquable vers <a href="https://www.alertes-meteo.com">www.alertes-meteo.com</a> :</p>
+<pre>"attribution": {
+  "text": "Source : M&eacute;t&eacute;o-France, donn&eacute;es retrait&eacute;es par Alertes-Meteo.com",
+  "url": "https://www.alertes-meteo.com"
+}</pre>
+<pre>&lt;a href="https://www.alertes-meteo.com" rel="noopener"&gt;Alertes-Meteo.com&lt;/a&gt;</pre>
+<p>Pour les donnees de Meteo-France, l'attribution contient aussi la mention de source exigee par la Licence Ouverte Etalab : ne la retirez pas.</p>
+
 <h2>Sources et licences</h2>
 <p><strong>Source : Meteo-France.</strong> Les endpoints <code>extremes/france</code>, <code>vigilance</code>, <code>records</code> et <code>rain</code> reposent sur des informations creees a partir de donnees de Meteo-France, reutilisees sous Licence Ouverte Etalab. Alertes-Meteo les retraite (agregation, calculs, mise en cache) : elles ne sont ni officielles ni validees par Meteo-France. Pour la vigilance officielle, consultez vigilance.meteofrance.fr. L'endpoint <code>sun</code> est calcule localement, sans donnee externe.</p>
 
@@ -124,6 +134,6 @@ print(r.json())</pre>
 <p>Format : <code>{"error":{"code":"...","message":"..."}}</code>. Codes : 401 cle invalide, 403 compte suspendu, 404 inconnu, 422 parametre invalide, 429 quota (voir <code>Retry-After</code> et <code>X-RateLimit-*</code>), 503 indisponible.</p>
 <p>Offre gratuite : 30 requetes/minute, 10 000/mois.</p>
 <hr>
-<p><small>Source : Meteo-France (donnees retraitees par Alertes-Meteo, service non officiel).</small></p>
+<p><small>Source : Meteo-France (donnees retraitees par Alertes-Meteo, service non officiel). Un service <a href="https://www.alertes-meteo.com" rel="noopener">Alertes-Meteo.com</a>.</small></p>
 </body>
 </html>

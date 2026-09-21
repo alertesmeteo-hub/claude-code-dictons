@@ -50,21 +50,21 @@ final class App
             return;
         }
         $hash = md5($sql);
-        $pdo->exec('CREATE TABLE IF NOT EXISTS schema_meta (id TINYINT UNSIGNED PRIMARY KEY, hash CHAR(32) NOT NULL) ENGINE=InnoDB');
-        if ($pdo->query('SELECT hash FROM schema_meta WHERE id = 1')->fetchColumn() === $hash) {
+        $pdo->exec('CREATE TABLE IF NOT EXISTS am_schema_meta (id TINYINT UNSIGNED PRIMARY KEY, hash CHAR(32) NOT NULL) ENGINE=InnoDB');
+        if ($pdo->query('SELECT hash FROM am_schema_meta WHERE id = 1')->fetchColumn() === $hash) {
             return;
         }
         $clean = preg_replace('/--[^\n]*/', '', $sql);
         foreach (array_filter(array_map('trim', explode(';', $clean))) as $stmt) {
             $pdo->exec($stmt);
         }
-        $pdo->prepare('INSERT INTO schema_meta (id, hash) VALUES (1, ?) ON DUPLICATE KEY UPDATE hash = VALUES(hash)')->execute([$hash]);
+        $pdo->prepare('INSERT INTO am_schema_meta (id, hash) VALUES (1, ?) ON DUPLICATE KEY UPDATE hash = VALUES(hash)')->execute([$hash]);
     }
 
     /** Vrai si l'interrupteur d'urgence de ce nom est actif. */
     public static function switchOff(string $name): bool
     {
-        $st = self::db()->prepare('SELECT 1 FROM kill_switch WHERE name = ? AND disabled = 1');
+        $st = self::db()->prepare('SELECT 1 FROM am_kill_switch WHERE name = ? AND disabled = 1');
         $st->execute([$name]);
         return (bool) $st->fetchColumn();
     }
@@ -92,6 +92,13 @@ final class App
 
     public static function ok(array $data, array $meta = []): never
     {
-        self::json(200, ['data' => $data, 'meta' => $meta + ['version' => 'v1', 'units' => 'metric', 'generated_at' => gmdate('c')]]);
+        $meta += ['version' => 'v1', 'units' => 'metric', 'generated_at' => gmdate('c')];
+        // Attribution a afficher par les sites qui reutilisent les donnees (lien vers Alertes-Meteo.com)
+        $fromMeteoFrance = str_contains((string) ($meta['source'] ?? ''), 'Meteo-France');
+        $meta['attribution'] = [
+            'text' => $fromMeteoFrance ? 'Source : Météo-France, données retraitées par Alertes-Meteo.com' : 'Données fournies par Alertes-Meteo.com',
+            'url' => 'https://www.alertes-meteo.com',
+        ];
+        self::json(200, ['data' => $data, 'meta' => $meta]);
     }
 }
