@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import { suivre } from '@/lib/suivi';
+import ThemeToggle from './ThemeToggle';
 
 const ENTREES = [
   { libelle: 'Fête du jour', ancre: 'fete-du-jour' },
@@ -38,6 +39,9 @@ export default function MenuSite() {
           </li>
           <li>
             <a href="/jours-feries" onClick={() => suivre('Menu', { entrée: 'Jours fériés' })}>Jours fériés</a>
+          </li>
+          <li>
+            <ThemeToggle />
           </li>
         </ul>
       </nav>
