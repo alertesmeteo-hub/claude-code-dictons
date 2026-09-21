@@ -612,16 +612,25 @@ switch ("$methode:$route") {
 			$bulletins[$r['departement']][] = ['base' => 'carte', 'id' => (int)(str_replace('-', '', $date) . str_replace(':', '', $r['heure'])), 'heure' => $r['heure']];
 		}
 		$stmt = $db->prepare(
-			'SELECT d.departement, b.base, b.bulletin_id AS id, b.heure FROM vigilance_bulletin b
+			'SELECT d.departement, d.statut, b.base, b.bulletin_id AS id, b.heure, b.masque, b.producteur FROM vigilance_bulletin b
 			 JOIN vigilance_bulletin_dept d ON d.base = b.base AND d.bulletin_id = b.bulletin_id
 			 WHERE b.date = ? ORDER BY b.heure'
 		);
 		$stmt->bind_param('s', $date);
 		$stmt->execute();
+		$masqueDep = [];
 		foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $r) {
 			$bulletins[$r['departement']][] = ['base' => $r['base'], 'id' => (int)$r['id'], 'heure' => $r['heure']];
+			// Jours d'archive : phénomène(s) des bulletins régionaux qui suivent (début ou maintien) le département.
+			if ($r['producteur'] !== 'CNP' && (int)$r['statut'] <= 2) $masqueDep[$r['departement']] = ($masqueDep[$r['departement']] ?? 0) | (int)$r['masque'];
 		}
-		foreach ($deps as &$d) $d['bulletins'] = $bulletins[$d['code']] ?? [];
+		foreach ($deps as &$d) {
+			$d['bulletins'] = $bulletins[$d['code']] ?? [];
+			if (empty($d['phenomenes']) && !empty($masqueDep[$d['code']])) {
+				// c = 0 : couleur du phénomène inconnue pour cette période (seule la couleur du département l'est).
+				for ($n = 1; $n <= 9; $n++) if ($masqueDep[$d['code']] & (1 << ($n - 1))) $d['phenomenes'][] = ['n' => $n, 'c' => 0];
+			}
+		}
 		unset($d);
 		repondre($deps);
 
