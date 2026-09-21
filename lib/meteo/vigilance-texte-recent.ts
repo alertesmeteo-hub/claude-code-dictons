@@ -4,6 +4,8 @@
  * bulletins zonaux, puis les départements ayant un texte propre, regroupés quand plusieurs partagent le même texte.
  */
 
+import { DEPARTEMENTS_FR } from './departements-fr';
+
 interface SousTexte {
   bold_text?: string;
   underline_text?: string;
@@ -84,7 +86,11 @@ export function texteDepuisCdpTextes(brut: string): string {
   // Départements : même texte pour plusieurs départements → une seule fois, avec la liste des départements.
   const groupes = new Map<string, { titre: string; deps: string[]; ligne: string }>();
   for (const b of blocs.filter((x) => x.bloc_id === 'BULLETIN_DEPARTEMENTAL')) {
-    const nom = propre((b.bloc_title ?? '').split(':').slice(1).join(':')) || String(b.domain_id);
+    // Le titre du bloc porte le nom (« … : Calvados (14) ») pour les bulletins récents ; sinon domain_name (« Aube »), puis le code.
+    const code = String(b.domain_id ?? '');
+    const nomDuCode = DEPARTEMENTS_FR[code] ? `${DEPARTEMENTS_FR[code]} (${code})` : '';
+    const nomBrut = propre((b.bloc_title ?? '').split(':').slice(1).join(':')) || (b.domain_name ? `${propre(b.domain_name)} (${code})` : '');
+    const nom = nomBrut || nomDuCode || code;
     for (const it of b.bloc_items ?? []) {
       for (const ligne of lignesItem(it)) {
         const cle = `${it.type_name}|${ligne}`;

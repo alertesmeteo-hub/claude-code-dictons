@@ -35,3 +35,19 @@ describe('texteDepuisCdpTextes', () => {
     expect(t).not.toContain('Néant');
   });
 });
+
+describe('texteDepuisCdpTextes — noms de départements', () => {
+  it("utilise domain_name quand le titre du bloc n'a pas le nom (bulletins de 2023-2024)", () => {
+    const brut = JSON.stringify({
+      product: {
+        text_bloc_items: [
+          { domain_id: '10', domain_name: 'Aube', bloc_id: 'BULLETIN_DEPARTEMENTAL', bloc_title: 'Bulletin de Vigilance météo Zone Est*', bloc_items: [item('Prévisibilité', 'tous aléas', ['Risque de verglas.'])] },
+          { domain_id: '11', bloc_id: 'BULLETIN_DEPARTEMENTAL', bloc_title: 'Bulletin de Vigilance', bloc_items: [item('Prévisibilité', 'tous aléas', ['Risque de verglas.'])] },
+        ],
+      },
+    });
+    const t = texteDepuisCdpTextes(brut);
+    expect(t).toContain('Aube (10), Aude (11)');
+    expect(t).not.toMatch(/— 10, 11/);
+  });
+});
