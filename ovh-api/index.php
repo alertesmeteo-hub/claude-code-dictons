@@ -489,7 +489,37 @@ switch ("$methode:$route") {
 		);
 		$stmt->bind_param('sss', $departement, $debut, $debut);
 		$stmt->execute();
-		repondre($stmt->get_result()->fetch_all(MYSQLI_ASSOC));
+		$jours = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+		// Phénomènes de chaque jour, pour l'info-bulle du calendrier : [{n: numéro, c: couleur (0 = inconnue)}].
+		// Jours récents (data.gouv, 2022+) : phénomènes du département avec leur couleur.
+		assurerTablePhenomenesJour($db);
+		$stmt = $db->prepare(
+			'SELECT date, phenomene, couleur FROM vigilance_phenomene_jour
+			 WHERE departement = ? AND date >= ? AND date < DATE_ADD(?, INTERVAL 1 MONTH) ORDER BY date, couleur DESC, phenomene'
+		);
+		$stmt->bind_param('sss', $departement, $debut, $debut);
+		$stmt->execute();
+		$parJour = [];
+		foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $r) $parJour[$r['date']][] = ['n' => (int)$r['phenomene'], 'c' => (int)$r['couleur']];
+
+		// Jours d'archive (2001-2022) : phénomène(s) des bulletins régionaux qui suivent le département (début ou maintien).
+		assurerTablesVigilanceTextes($db);
+		$stmt = $db->prepare(
+			"SELECT b.date, BIT_OR(b.masque) AS m FROM vigilance_bulletin b
+			 JOIN vigilance_bulletin_dept d ON d.base = b.base AND d.bulletin_id = b.bulletin_id
+			 WHERE d.departement = ? AND b.date >= ? AND b.date < DATE_ADD(?, INTERVAL 1 MONTH)
+			   AND b.producteur <> 'CNP' AND d.statut <= 2 GROUP BY b.date"
+		);
+		$stmt->bind_param('sss', $departement, $debut, $debut);
+		$stmt->execute();
+		foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $r) {
+			if (!empty($parJour[$r['date']])) continue;
+			for ($n = 1; $n <= 9; $n++) if (((int)$r['m']) & (1 << ($n - 1))) $parJour[$r['date']][] = ['n' => $n, 'c' => 0];
+		}
+		foreach ($jours as &$j) $j['phenomenes'] = $parJour[$j['date']] ?? [];
+		unset($j);
+		repondre($jours);
 
 	case 'POST:vigilance/departement-historique':
 		$db->query(
