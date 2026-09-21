@@ -569,7 +569,18 @@ switch ("$methode:$route") {
 		$stmt = $db->prepare('SELECT departement AS code, couleur FROM vigilance_departement_jour WHERE date = ? ORDER BY departement');
 		$stmt->bind_param('s', $date);
 		$stmt->execute();
-		repondre($stmt->get_result()->fetch_all(MYSQLI_ASSOC));
+		$deps = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+		// Phénomènes par département (jours récents, 2022+) : [{n: numéro, c: couleur}], du plus grave au moins grave.
+		assurerTablePhenomenesJour($db);
+		$stmt = $db->prepare('SELECT departement, phenomene, couleur FROM vigilance_phenomene_jour WHERE date = ? ORDER BY departement, couleur DESC, phenomene');
+		$stmt->bind_param('s', $date);
+		$stmt->execute();
+		$parDep = [];
+		foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $r) $parDep[$r['departement']][] = ['n' => (int)$r['phenomene'], 'c' => (int)$r['couleur']];
+		foreach ($deps as &$d) $d['phenomenes'] = $parDep[$d['code']] ?? [];
+		unset($d);
+		repondre($deps);
 
 	// Couleur maximale du jour par département et phénomène (1 à 9), jaune ou plus, pour les bulletins récents (2022+).
 	case 'POST:vigilance/phenomene-jour':
