@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { ovhApi } from '../lib/db/ovh-api-client';
-import { parseCarteVigilance } from '../lib/meteo/vigilance';
+import { parseCarteVigilance, parsePhenomenesCarte } from '../lib/meteo/vigilance';
 
 /**
  * Import ponctuel (à lancer manuellement, pas planifié) de l'historique des bulletins de vigilance
@@ -81,8 +81,10 @@ function* joursEntre(depuis: string, jusquA: string): Generator<string> {
 
 /** Couleur maximale du jour (échéance J) par département, cumulée sur les bulletins de la journée. */
 type MaxJour = Map<string, number>;
+/** Couleur maximale du jour (échéance J) par « département|phénomène ». */
+type MaxPhenomenes = Map<string, number>;
 
-async function traiterBulletin(date: string, hhmmss: string, maxJour: MaxJour): Promise<'ok' | 'ignore'> {
+async function traiterBulletin(date: string, hhmmss: string, maxJour: MaxJour, maxPhen: MaxPhenomenes): Promise<'ok' | 'ignore'> {
   const url = `${BASE}/${date.replace(/-/g, '/')}/${hhmmss}/CDP_CARTE_EXTERNE.json`;
   const brut = await get(url);
   if (!brut) return 'ignore';
@@ -90,6 +92,11 @@ async function traiterBulletin(date: string, hhmmss: string, maxJour: MaxJour): 
   const carte = parseCarteVigilance(brut);
   const heure = `${hhmmss.slice(0, 2)}:${hhmmss.slice(2, 4)}:${hhmmss.slice(4, 6)}`;
   await ovhApi.vigilanceEnregistrer(date, heure, carte, null);
+  for (const p of parsePhenomenesCarte(brut)) {
+    if (p.echeance !== 'J') continue;
+    const cle = `${p.departement}|${p.phenomene}`;
+    maxPhen.set(cle, Math.max(maxPhen.get(cle) ?? 0, p.couleur));
+  }
   for (const c of carte) if (c.echeance === 'J') maxJour.set(c.departement, Math.max(maxJour.get(c.departement) ?? 0, c.couleur));
   return 'ok';
 }
@@ -118,9 +125,10 @@ async function main() {
         console.warn(`${date} : page trouvée mais aucun bulletin détecté (format de listing inattendu ?)`);
       }
       const maxJour: MaxJour = new Map();
+      const maxPhen: MaxPhenomenes = new Map();
       for (const hhmmss of bulletins) {
         try {
-          const resultat = await traiterBulletin(date, hhmmss, maxJour);
+          const resultat = await traiterBulletin(date, hhmmss, maxJour, maxPhen);
           if (resultat === 'ok') bulletinsImportes++;
         } catch (e) {
           echecs++;

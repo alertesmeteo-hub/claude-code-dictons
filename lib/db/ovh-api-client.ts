@@ -108,6 +108,13 @@ export interface VigilanceDepartementJourApi {
   couleur: 1 | 2 | 3 | 4;
 }
 
+export interface VigilancePhenomeneJourApi {
+  date: string;
+  departement: string;
+  phenomene: number;
+  couleur: 2 | 3 | 4;
+}
+
 export interface VigilanceBulletinApi {
   date: string;
   heure: string;
@@ -210,6 +217,9 @@ export const ovhApi = {
 
   vigilanceNationalEnregistrer: (jours: VigilanceNationalJourApi[]) =>
     appelerApi<{ ok: true; compte: number }>('vigilance/national', { method: 'POST', body: JSON.stringify({ jours }) }),
+
+  vigilancePhenomenesJourEnregistrer: (jours: VigilancePhenomeneJourApi[]) =>
+    appelerApi<{ ok: true; compte: number }>('vigilance/phenomene-jour', { method: 'POST', body: JSON.stringify({ jours }) }),
 
   vigilanceNationalMois: (annee: number, mois: number) =>
     appelerApi<VigilanceNationalJourApi[]>(`vigilance/national&annee=${annee}&mois=${mois}`),

@@ -127,6 +127,21 @@ function assurerTableVigilanceBulletins($db) {
 	);
 }
 
+// Couleur max du jour par département et phénomène (Météo-France : 1 vent, 2 pluie-inondation, 3 orages, 4 crues,
+// 5 neige-verglas, 6 canicule, 7 grand froid, 8 avalanches, 9 vagues-submersion), pour les jours récents (data.gouv).
+function assurerTablePhenomenesJour($db) {
+	$db->query(
+		'CREATE TABLE IF NOT EXISTS vigilance_phenomene_jour (
+			date DATE NOT NULL,
+			departement VARCHAR(10) NOT NULL,
+			phenomene TINYINT NOT NULL,
+			couleur TINYINT NOT NULL,
+			PRIMARY KEY (date, departement, phenomene),
+			KEY idx_phenomene_date (phenomene, date)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+	);
+}
+
 // Texte intégral des bulletins (compressé : environ 3 fois moins de place) et départements suivis, avec leur statut
 // (1 début de suivi, 2 maintien, 3 fin). Tables créées automatiquement au premier appel.
 function assurerTablesVigilanceTextes($db) {
@@ -538,6 +553,22 @@ switch ("$methode:$route") {
 		}
 		repondre($liste);
 
+	// Couleur maximale du jour par département et phénomène (1 à 9), jaune ou plus, pour les bulletins récents (2022+).
+	case 'POST:vigilance/phenomene-jour':
+		assurerTablePhenomenesJour($db);
+		$d = corpsJson();
+		$compte = 0;
+		$stmt = $db->prepare(
+			'INSERT INTO vigilance_phenomene_jour (date, departement, phenomene, couleur) VALUES (?, ?, ?, ?)
+			 ON DUPLICATE KEY UPDATE couleur=VALUES(couleur)'
+		);
+		foreach (($d['jours'] ?? []) as $j) {
+			$stmt->bind_param('ssii', $j['date'], $j['departement'], $j['phenomene'], $j['couleur']);
+			$stmt->execute();
+			$compte++;
+		}
+		repondre(['ok' => true, 'compte' => $compte]);
+
 	// Jours de la période dont la couleur nationale correspond, éventuellement restreints à un phénomène (1 à 9).
 	// couleur : '' = orange et rouge ; 2 jaune, 3 orange, 4 rouge (exact). Plafond : 5000 jours par réponse.
 	case 'GET:vigilance/recherche':
@@ -553,14 +584,14 @@ switch ("$methode:$route") {
 		if ($phenomene !== '' && !preg_match('/^[1-9]$/', $phenomene)) repondre(['erreur' => 'phenomene invalide (1 a 9)'], 400);
 		$departement = $_GET['departement'] ?? '';
 		if ($departement !== '' && !preg_match('/^(\d{2}|2A|2B)$/', $departement)) repondre(['erreur' => 'departement invalide'], 400);
-		$having = $phenomene === '' ? '' : 'HAVING (masque & ' . (1 << ((int)$phenomene - 1)) . ') > 0';
+		$bitPhenomene = $phenomene === '' ? 0 : (1 << ((int)$phenomene - 1)); // filtre appliqué après fusion des sources (archive + jours récents)
 		if ($departement === '') {
 			// France entière : couleur nationale du jour + bulletins du jour.
 			$filtreCouleur = $couleur === '' ? 'n.couleur >= 3' : 'n.couleur = ' . (int)$couleur;
 			$sql = "SELECT n.date, n.couleur, COALESCE(BIT_OR(b.masque), 0) AS masque, COUNT(b.id) AS nbBulletins
 				FROM vigilance_national_jour n LEFT JOIN vigilance_bulletin b ON b.date = n.date
 				WHERE n.date BETWEEN ? AND ? AND $filtreCouleur
-				GROUP BY n.date, n.couleur $having ORDER BY n.date ASC LIMIT 5001";
+				GROUP BY n.date, n.couleur ORDER BY n.date ASC";
 			$stmt = $db->prepare($sql);
 			$stmt->bind_param('ss', $debut, $fin);
 		} else {
@@ -572,14 +603,32 @@ switch ("$methode:$route") {
 				LEFT JOIN vigilance_bulletin_dept d ON d.departement = dj.departement
 				LEFT JOIN vigilance_bulletin b ON b.base = d.base AND b.bulletin_id = d.bulletin_id AND b.date = dj.date
 				WHERE dj.departement = ? AND dj.date BETWEEN ? AND ? AND $filtreCouleur
-				GROUP BY dj.date, dj.couleur $having ORDER BY dj.date ASC LIMIT 5001";
+				GROUP BY dj.date, dj.couleur ORDER BY dj.date ASC";
 			$stmt = $db->prepare($sql);
 			$stmt->bind_param('sss', $departement, $debut, $fin);
 		}
 		$stmt->execute();
 		$lignes = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+		// Jours récents (data.gouv, 2022+) : phénomènes en jaune ou plus, fusionnés avec ceux de l'archive officielle.
+		assurerTablePhenomenesJour($db);
+		$seuil = $couleur === '2' ? 2 : 3;
+		$filtreDepPh = $departement === '' ? '' : ' AND departement = ?';
+		$stmt = $db->prepare(
+			"SELECT date, BIT_OR(1 << (phenomene - 1)) AS m FROM vigilance_phenomene_jour
+			 WHERE date BETWEEN ? AND ? AND couleur >= $seuil$filtreDepPh GROUP BY date"
+		);
+		if ($departement === '') $stmt->bind_param('ss', $debut, $fin);
+		else $stmt->bind_param('sss', $debut, $fin, $departement);
+		$stmt->execute();
+		$masqueRecent = [];
+		foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $r) $masqueRecent[$r['date']] = (int)$r['m'];
+		foreach ($lignes as &$l) $l['masque'] = (int)$l['masque'] | ($masqueRecent[$l['date']] ?? 0);
+		unset($l);
+		if ($bitPhenomene > 0) {
+			$lignes = array_values(array_filter($lignes, function ($l) use ($bitPhenomene) { return ($l['masque'] & $bitPhenomene) > 0; }));
+		}
 		$tronque = count($lignes) > 5000;
-		if ($tronque) array_pop($lignes);
+		if ($tronque) $lignes = array_slice($lignes, 0, 5000);
 
 		// Bulletins récents (cartes data.gouv, 2022+) : un bulletin par heure de carte, comptés en plus de l'archive officielle.
 		if ($lignes) {
