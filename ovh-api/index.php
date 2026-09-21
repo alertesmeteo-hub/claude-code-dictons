@@ -450,7 +450,44 @@ switch ("$methode:$route") {
 		$stmt = $db->prepare('SELECT date, couleur, commentaire FROM vigilance_national_jour WHERE date >= ? AND date < DATE_ADD(?, INTERVAL 1 MONTH) ORDER BY date ASC');
 		$stmt->bind_param('ss', $debut, $debut);
 		$stmt->execute();
-		repondre($stmt->get_result()->fetch_all(MYSQLI_ASSOC));
+		$jours = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+		// Phénomènes de chaque jour pour l'info-bulle du calendrier : [{n: numéro, c: couleur (0 = inconnue)}].
+		// Jours récents (2022+) : couleur maximale de chaque phénomène sur tous les départements ; on ne garde que ceux
+		// à la couleur du jour (orange ou plus, ou jaune si la journée est jaune) pour éviter une liste interminable.
+		assurerTablePhenomenesJour($db);
+		$stmt = $db->prepare(
+			'SELECT date, phenomene, MAX(couleur) AS couleur FROM vigilance_phenomene_jour
+			 WHERE date >= ? AND date < DATE_ADD(?, INTERVAL 1 MONTH) GROUP BY date, phenomene ORDER BY date, couleur DESC, phenomene'
+		);
+		$stmt->bind_param('ss', $debut, $debut);
+		$stmt->execute();
+		$parJour = [];
+		foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $r) $parJour[$r['date']][] = ['n' => (int)$r['phenomene'], 'c' => (int)$r['couleur']];
+
+		// Jours d'archive (2001-2022) : phénomène(s) de tous les bulletins du jour (couleur du phénomène inconnue).
+		assurerTableVigilanceBulletins($db);
+		$stmt = $db->prepare(
+			'SELECT date, BIT_OR(masque) AS m FROM vigilance_bulletin
+			 WHERE date >= ? AND date < DATE_ADD(?, INTERVAL 1 MONTH) GROUP BY date'
+		);
+		$stmt->bind_param('ss', $debut, $debut);
+		$stmt->execute();
+		$masqueArchive = [];
+		foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $r) $masqueArchive[$r['date']] = (int)$r['m'];
+
+		foreach ($jours as &$j) {
+			$liste = [];
+			if (!empty($parJour[$j['date']])) {
+				$seuil = min(3, (int)$j['couleur']);
+				foreach ($parJour[$j['date']] as $p) if ($p['c'] >= $seuil) $liste[] = $p;
+			} elseif (!empty($masqueArchive[$j['date']])) {
+				for ($n = 1; $n <= 9; $n++) if ($masqueArchive[$j['date']] & (1 << ($n - 1))) $liste[] = ['n' => $n, 'c' => 0];
+			}
+			$j['phenomenes'] = $liste;
+		}
+		unset($j);
+		repondre($jours);
 
 	case 'POST:vigilance/national':
 		$db->query(
