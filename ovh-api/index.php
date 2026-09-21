@@ -580,6 +580,36 @@ switch ("$methode:$route") {
 		foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $r) $parDep[$r['departement']][] = ['n' => (int)$r['phenomene'], 'c' => (int)$r['couleur']];
 		foreach ($deps as &$d) $d['phenomenes'] = $parDep[$d['code']] ?? [];
 		unset($d);
+
+		// Bulletins du jour concernant chaque département : cartes récentes (id = AAAAMMJJHHMMSS, base « carte »)
+		// où le département est au moins à la couleur maximale de sa journée (orange ou plus : uniquement orange/rouge),
+		// et bulletins de l'archive officielle qui le citent (texte intégral).
+		assurerTablesVigilance($db);
+		assurerTablesVigilanceTextes($db);
+		$parCode = [];
+		foreach ($deps as $i => $d) $parCode[$d['code']] = $i;
+		$bulletins = [];
+		$stmt = $db->prepare("SELECT heure, departement, couleur FROM vigilance_carte WHERE date = ? AND echeance = 'J' AND couleur >= 2 ORDER BY heure");
+		$stmt->bind_param('s', $date);
+		$stmt->execute();
+		foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $r) {
+			if (!isset($parCode[$r['departement']])) continue;
+			$seuil = $deps[$parCode[$r['departement']]]['couleur'] >= 3 ? 3 : 2;
+			if ((int)$r['couleur'] < $seuil) continue;
+			$bulletins[$r['departement']][] = ['base' => 'carte', 'id' => (int)(str_replace('-', '', $date) . str_replace(':', '', $r['heure'])), 'heure' => $r['heure']];
+		}
+		$stmt = $db->prepare(
+			'SELECT d.departement, b.base, b.bulletin_id AS id, b.heure FROM vigilance_bulletin b
+			 JOIN vigilance_bulletin_dept d ON d.base = b.base AND d.bulletin_id = b.bulletin_id
+			 WHERE b.date = ? ORDER BY b.heure'
+		);
+		$stmt->bind_param('s', $date);
+		$stmt->execute();
+		foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $r) {
+			$bulletins[$r['departement']][] = ['base' => $r['base'], 'id' => (int)$r['id'], 'heure' => $r['heure']];
+		}
+		foreach ($deps as &$d) $d['bulletins'] = $bulletins[$d['code']] ?? [];
+		unset($d);
 		repondre($deps);
 
 	// Couleur maximale du jour par département et phénomène (1 à 9), jaune ou plus, pour les bulletins récents (2022+).
