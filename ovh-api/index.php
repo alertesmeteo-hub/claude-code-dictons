@@ -606,11 +606,11 @@ switch ("$methode:$route") {
 		$res = $db->query(
 			"SELECT b.base, b.bulletin_id AS bulletinId FROM vigilance_bulletin b
 			 LEFT JOIN vigilance_bulletin_texte t ON t.base = b.base AND t.bulletin_id = b.bulletin_id
-			 WHERE t.bulletin_id IS NULL ORDER BY b.date ASC, b.id ASC LIMIT $limite"
+			 WHERE t.bulletin_id IS NULL AND b.base NOT LIKE 'carte%' ORDER BY b.date ASC, b.id ASC LIMIT $limite"
 		);
 		$reste = $db->query(
 			'SELECT COUNT(*) AS n FROM vigilance_bulletin b
-			 LEFT JOIN vigilance_bulletin_texte t ON t.base = b.base AND t.bulletin_id = b.bulletin_id WHERE t.bulletin_id IS NULL'
+			 LEFT JOIN vigilance_bulletin_texte t ON t.base = b.base AND t.bulletin_id = b.bulletin_id WHERE t.bulletin_id IS NULL AND b.base NOT LIKE \'carte%\''
 		)->fetch_assoc();
 		repondre(['bulletins' => $res->fetch_all(MYSQLI_ASSOC), 'restant' => (int)$reste['n']]);
 

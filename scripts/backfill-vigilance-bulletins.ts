@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { ovhApi } from '../lib/db/ovh-api-client';
 import type { VigilanceBulletinApi } from '../lib/db/ovh-api-client';
-import { parserPageJour, urlPageJour } from '../lib/meteo/vigilance-archive';
+import { parserCartesPage, parserPageJour, urlPageJour } from '../lib/meteo/vigilance-archive';
 
 /**
  * Import ponctuel (à lancer manuellement, pas planifié) des BULLETINS de l'archive officielle de vigilance
@@ -81,7 +81,9 @@ async function main() {
   for (const date of joursEntre(depuis, jusquA)) {
     try {
       const html = await avecReprises(() => pageDuJour(date));
-      const trouves = parserPageJour(date, html);
+      let trouves = parserPageJour(date, html);
+      // Jour sans bulletin mais avec des cartes : on les liste (heure + niveau), sans texte.
+      if (trouves.length === 0) trouves = parserCartesPage(date, html);
       jours++;
       if (trouves.length > 0) {
         joursAvecBulletins++;

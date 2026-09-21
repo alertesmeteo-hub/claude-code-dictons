@@ -87,6 +87,29 @@ export function parserPageJour(date: string, html: string): BulletinArchive[] {
   return bulletins;
 }
 
+/**
+ * Cartes d'un jour (heure + niveau max, sans texte) : pour les jours où l'archive n'a pas de bulletin,
+ * on les liste comme des « bulletins » sans texte. Base synthétique `carte_<base>` : ne pas confondre
+ * les identifiants de cartes avec ceux des bulletins.
+ */
+export function parserCartesPage(date: string, html: string): BulletinArchive[] {
+  const cartes: BulletinArchive[] = [];
+  const LIGNE_CARTE =
+    /href='vigi\.php\?type=carte&(?:amp;)?id=(\d+)&(?:amp;)?base=(\w+)'>(\d{2}:\d{2})<\/a><\/td><td[^>]*><span class='contenu'>([^<]+)<\/span>/g;
+  for (const m of html.matchAll(LIGNE_CARTE)) {
+    cartes.push({
+      date,
+      heure: `${m[3]}:00`,
+      producteur: 'Carte',
+      phenomenes: `Carte de vigilance — niveau max ${decoderEntites(m[4]).trim().toLowerCase()}`,
+      masque: 0,
+      bulletinId: Number(m[1]),
+      base: `carte_${m[2]}`,
+    });
+  }
+  return cartes;
+}
+
 /** URL officielle d'un bulletin (ouverture directe). */
 export const urlBulletin = (b: Pick<BulletinArchive, 'bulletinId' | 'base'>) =>
   `${ARCHIVE_BASE}/vigi.php?type=bulletin&id=${b.bulletinId}&base=${b.base}`;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { masqueDepuisLibelle, nomsDepuisMasque, parserPageJour, urlBulletin } from '@/lib/meteo/vigilance-archive';
+import { masqueDepuisLibelle, nomsDepuisMasque, parserCartesPage, parserPageJour, urlBulletin } from '@/lib/meteo/vigilance-archive';
 
 // Extrait réel de http://vigilance-public.meteo.fr/vigilanceDate.php?dateVigi=2001-10-06 (mise en forme conservée).
 const PAGE = `<h3>BULLETINS :</h3><table><thead><tr class='headertab'><th>Heure</th><th>Producteur</th><th>Ph&eacute;nom&egrave;nes</th></tr></thead><tbody>` +
@@ -138,5 +138,25 @@ describe('niveauMaxDepuisTexte', () => {
     expect(niveauMaxDepuisTexte('Vent violent/Orange\nOrages/Rouge')).toBe(4);
     expect(niveauMaxDepuisTexte('Canicule/Jaune')).toBe(2);
     expect(niveauMaxDepuisTexte('aucune couleur ici')).toBeNull();
+  });
+});
+
+describe('parserCartesPage', () => {
+  const PAGE_CARTES =
+    `<h3>CARTES :</h3><table><tbody><tr><td><a class='iframe' title='Carte de 2021-12-13 06:00:00' alt='carte' href='vigi.php?type=carte&id=10583&base=vigilance4'>06:00</a></td><td class='couleur_orange'><span class='contenu'>Orange</span></td></tr>` +
+    `<tr><td><a class='iframe' href='vigi.php?type=carte&id=10584&base=vigilance4'>10:01</a></td><td class='couleur_rouge'><span class='contenu'>Rouge</span></td></tr></tbody></table>` +
+    `<span class='contenu'>Pas de Bulletin Vigilance le 2021-12-13</span>`;
+
+  it('extrait heure, niveau et identifiant de chaque carte', () => {
+    const c = parserCartesPage('2021-12-13', PAGE_CARTES);
+    expect(c).toHaveLength(2);
+    expect(c[0]).toEqual({
+      date: '2021-12-13', heure: '06:00:00', producteur: 'Carte', phenomenes: 'Carte de vigilance — niveau max orange', masque: 0, bulletinId: 10583, base: 'carte_vigilance4',
+    });
+    expect(c[1].phenomenes).toContain('rouge');
+  });
+
+  it('renvoie une liste vide sans carte', () => {
+    expect(parserCartesPage('2003-08-05', '<p>rien</p>')).toEqual([]);
   });
 });
