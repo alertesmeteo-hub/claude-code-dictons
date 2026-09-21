@@ -664,7 +664,11 @@ switch ("$methode:$route") {
 		$phenomene = $_GET['phenomene'] ?? '';
 		if ($phenomene !== '' && !preg_match('/^[1-9]$/', $phenomene)) repondre(['erreur' => 'phenomene invalide (1 a 9)'], 400);
 		$departement = $_GET['departement'] ?? '';
-		if ($departement !== '' && !preg_match('/^(\d{2}|2A|2B)$/', $departement)) repondre(['erreur' => 'departement invalide'], 400);
+		// Un département, ou plusieurs séparés par des virgules (une région).
+		if ($departement !== '' && !preg_match('/^(\d{2}|2A|2B)(,(\d{2}|2A|2B)){0,19}$/', $departement)) repondre(['erreur' => 'departement invalide'], 400);
+		$listeDeps = $departement === '' ? [] : explode(',', $departement);
+		$marqueursDeps = implode(',', array_fill(0, max(1, count($listeDeps)), '?'));
+		$typesDeps = str_repeat('s', count($listeDeps));
 		$bitPhenomene = $phenomene === '' ? 0 : (1 << ((int)$phenomene - 1)); // filtre appliqué après fusion des sources (archive + jours récents)
 		if ($departement === '') {
 			// France entière : couleur nationale du jour + bulletins du jour.
@@ -679,27 +683,27 @@ switch ("$methode:$route") {
 			// Un département : couleur du département + bulletins qui le citent (nécessite l'import des textes).
 			assurerTablesVigilanceTextes($db);
 			$filtreCouleur = $couleur === '' ? 'dj.couleur >= 3' : 'dj.couleur = ' . (int)$couleur;
-			$sql = "SELECT dj.date, dj.couleur, COALESCE(BIT_OR(b.masque), 0) AS masque, COUNT(DISTINCT b.id) AS nbBulletins
+			$sql = "SELECT dj.date, MAX(dj.couleur) AS couleur, COALESCE(BIT_OR(b.masque), 0) AS masque, COUNT(DISTINCT b.id) AS nbBulletins
 				FROM vigilance_departement_jour dj
 				LEFT JOIN vigilance_bulletin_dept d ON d.departement = dj.departement
 				LEFT JOIN vigilance_bulletin b ON b.base = d.base AND b.bulletin_id = d.bulletin_id AND b.date = dj.date
-				WHERE dj.departement = ? AND dj.date BETWEEN ? AND ? AND $filtreCouleur
-				GROUP BY dj.date, dj.couleur ORDER BY dj.date ASC";
+				WHERE dj.departement IN ($marqueursDeps) AND dj.date BETWEEN ? AND ? AND $filtreCouleur
+				GROUP BY dj.date ORDER BY dj.date ASC";
 			$stmt = $db->prepare($sql);
-			$stmt->bind_param('sss', $departement, $debut, $fin);
+			$stmt->bind_param($typesDeps . 'ss', ...array_merge($listeDeps, [$debut, $fin]));
 		}
 		$stmt->execute();
 		$lignes = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 		// Jours récents (data.gouv, 2022+) : phénomènes en jaune ou plus, fusionnés avec ceux de l'archive officielle.
 		assurerTablePhenomenesJour($db);
 		$seuil = $couleur === '2' ? 2 : 3;
-		$filtreDepPh = $departement === '' ? '' : ' AND departement = ?';
+		$filtreDepPh = $departement === '' ? '' : " AND departement IN ($marqueursDeps)";
 		$stmt = $db->prepare(
 			"SELECT date, BIT_OR(1 << (phenomene - 1)) AS m FROM vigilance_phenomene_jour
 			 WHERE date BETWEEN ? AND ? AND couleur >= $seuil$filtreDepPh GROUP BY date"
 		);
 		if ($departement === '') $stmt->bind_param('ss', $debut, $fin);
-		else $stmt->bind_param('sss', $debut, $fin, $departement);
+		else $stmt->bind_param('ss' . $typesDeps, ...array_merge([$debut, $fin], $listeDeps));
 		$stmt->execute();
 		$masqueRecent = [];
 		foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $r) $masqueRecent[$r['date']] = (int)$r['m'];
@@ -714,13 +718,13 @@ switch ("$methode:$route") {
 		// Bulletins récents (cartes data.gouv, 2022+) : un bulletin par heure de carte, comptés en plus de l'archive officielle.
 		if ($lignes) {
 			assurerTablesVigilance($db);
-			$filtreDep = $departement === '' ? '' : ' AND departement = ?';
+			$filtreDep = $departement === '' ? '' : " AND departement IN ($marqueursDeps)";
 			$stmt = $db->prepare(
 				"SELECT date, COUNT(DISTINCT heure) AS n FROM vigilance_carte
 				 WHERE date BETWEEN ? AND ? AND echeance = 'J'$filtreDep GROUP BY date"
 			);
 			if ($departement === '') $stmt->bind_param('ss', $debut, $fin);
-			else $stmt->bind_param('sss', $debut, $fin, $departement);
+			else $stmt->bind_param('ss' . $typesDeps, ...array_merge([$debut, $fin], $listeDeps));
 			$stmt->execute();
 			$parJour = [];
 			foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $r) $parJour[$r['date']] = (int)$r['n'];
