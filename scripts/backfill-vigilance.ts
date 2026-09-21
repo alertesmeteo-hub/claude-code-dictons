@@ -144,6 +144,14 @@ async function main() {
           [...maxJour].map(([departement, couleur]) => ({ date, departement, couleur: couleur as 1 | 2 | 3 | 4 })),
         );
       }
+      // Phénomènes en jaune ou plus (le vert n'est pas stocké) : alimente le filtre « phénomène » de la recherche.
+      const phenomenes = [...maxPhen]
+        .filter(([, couleur]) => couleur >= 2)
+        .map(([cle, couleur]) => {
+          const [departement, phenomene] = cle.split('|');
+          return { date, departement, phenomene: Number(phenomene), couleur: couleur as 2 | 3 | 4 };
+        });
+      if (phenomenes.length > 0) await ovhApi.vigilancePhenomenesJourEnregistrer(phenomenes);
       joursTraites++;
       if (joursTraites % 30 === 0) console.log(`… ${date} (${joursTraites} jours traités, ${bulletinsImportes} bulletins importés)`);
     } catch (e) {
