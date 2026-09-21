@@ -580,6 +580,23 @@ switch ("$methode:$route") {
 		$lignes = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 		$tronque = count($lignes) > 5000;
 		if ($tronque) array_pop($lignes);
+
+		// Bulletins récents (cartes data.gouv, 2022+) : un bulletin par heure de carte, comptés en plus de l'archive officielle.
+		if ($lignes) {
+			assurerTablesVigilance($db);
+			$filtreDep = $departement === '' ? '' : ' AND departement = ?';
+			$stmt = $db->prepare(
+				"SELECT date, COUNT(DISTINCT heure) AS n FROM vigilance_carte
+				 WHERE date BETWEEN ? AND ? AND echeance = 'J'$filtreDep GROUP BY date"
+			);
+			if ($departement === '') $stmt->bind_param('ss', $debut, $fin);
+			else $stmt->bind_param('sss', $debut, $fin, $departement);
+			$stmt->execute();
+			$parJour = [];
+			foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $r) $parJour[$r['date']] = (int)$r['n'];
+			foreach ($lignes as &$l) $l['nbBulletins'] = (int)$l['nbBulletins'] + ($parJour[$l['date']] ?? 0);
+			unset($l);
+		}
 		repondre(['jours' => $lignes, 'tronque' => $tronque]);
 
 	// Bulletins listés mais dont le texte n'a pas encore été récupéré (reprise possible de l'import).
