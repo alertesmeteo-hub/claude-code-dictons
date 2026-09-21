@@ -553,6 +553,24 @@ switch ("$methode:$route") {
 		}
 		repondre($liste);
 
+	// Couleur maximale du jour pour chaque département (toutes époques : archive 2001+ et jours récents), pour la carte de France.
+	case 'GET:vigilance/departements-jour':
+		$date = $_GET['date'] ?? '';
+		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) repondre(['erreur' => 'date requise (AAAA-MM-JJ)'], 400);
+		$db->query(
+			'CREATE TABLE IF NOT EXISTS vigilance_departement_jour (
+				date DATE NOT NULL,
+				departement VARCHAR(10) NOT NULL,
+				couleur TINYINT NOT NULL,
+				fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY (date, departement)
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+		);
+		$stmt = $db->prepare('SELECT departement AS code, couleur FROM vigilance_departement_jour WHERE date = ? ORDER BY departement');
+		$stmt->bind_param('s', $date);
+		$stmt->execute();
+		repondre($stmt->get_result()->fetch_all(MYSQLI_ASSOC));
+
 	// Couleur maximale du jour par département et phénomène (1 à 9), jaune ou plus, pour les bulletins récents (2022+).
 	case 'POST:vigilance/phenomene-jour':
 		assurerTablePhenomenesJour($db);
