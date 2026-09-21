@@ -513,7 +513,30 @@ switch ("$methode:$route") {
 		);
 		$stmt->bind_param('s', $date);
 		$stmt->execute();
-		repondre($stmt->get_result()->fetch_all(MYSQLI_ASSOC));
+		$liste = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+		// Bulletins récents (data.gouv / API Météo-France, 2022+) : un bulletin par heure de carte.
+		// Identifiant synthétique base « carte », id = AAAAMMJJHHMMSS.
+		assurerTablesVigilance($db);
+		$stmt = $db->prepare(
+			"SELECT heure, MAX(couleur) AS couleurMax, SUM(couleur >= 3) AS nbAlertes
+			 FROM vigilance_carte WHERE date = ? AND echeance = 'J' GROUP BY heure ORDER BY heure ASC"
+		);
+		$stmt->bind_param('s', $date);
+		$stmt->execute();
+		foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $c) {
+			$nomsCouleur = [1 => 'vert', 2 => 'jaune', 3 => 'orange', 4 => 'rouge'];
+			$liste[] = [
+				'date' => $date,
+				'heure' => $c['heure'],
+				'producteur' => 'Carte',
+				'phenomenes' => 'Carte de vigilance — niveau max ' . ($nomsCouleur[(int)$c['couleurMax']] ?? '') . ((int)$c['nbAlertes'] > 0 ? ' (' . (int)$c['nbAlertes'] . ' départements en orange/rouge)' : ''),
+				'masque' => 0,
+				'bulletinId' => (int)(str_replace('-', '', $date) . str_replace(':', '', $c['heure'])),
+				'base' => 'carte',
+			];
+		}
+		repondre($liste);
 
 	// Jours de la période dont la couleur nationale correspond, éventuellement restreints à un phénomène (1 à 9).
 	// couleur : '' = orange et rouge ; 2 jaune, 3 orange, 4 rouge (exact). Plafond : 5000 jours par réponse.
@@ -608,6 +631,23 @@ switch ("$methode:$route") {
 		$base = $_GET['base'] ?? '';
 		$id = (int)($_GET['id'] ?? 0);
 		if (!preg_match('/^\w{1,30}$/', $base) || $id < 1) repondre(['erreur' => 'base et id requis'], 400);
+		if ($base === 'carte') {
+			// Bulletin récent : id = AAAAMMJJHHMMSS, contenu = couleurs par département de cette carte.
+			assurerTablesVigilance($db);
+			$s = sprintf('%014d', $id);
+			$date = substr($s, 0, 4) . '-' . substr($s, 4, 2) . '-' . substr($s, 6, 2);
+			$heure = substr($s, 8, 2) . ':' . substr($s, 10, 2) . ':' . substr($s, 12, 2);
+			$stmt = $db->prepare("SELECT departement AS code, couleur FROM vigilance_carte WHERE date = ? AND heure = ? AND echeance = 'J' ORDER BY departement");
+			$stmt->bind_param('ss', $date, $heure);
+			$stmt->execute();
+			$carte = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+			if (!$carte) repondre(['erreur' => 'bulletin inconnu'], 404);
+			repondre([
+				'date' => $date, 'heure' => $heure, 'producteur' => 'Carte', 'phenomenes' => 'Carte de vigilance',
+				'masque' => 0, 'texte' => null, 'niveauMax' => (int)max(array_column($carte, 'couleur')),
+				'departements' => [], 'carte' => $carte,
+			]);
+		}
 		$stmt = $db->prepare(
 			'SELECT b.date, b.heure, b.producteur, b.phenomenes, b.masque, UNCOMPRESS(t.contenu) AS texte, t.niveau_max AS niveauMax
 			 FROM vigilance_bulletin b LEFT JOIN vigilance_bulletin_texte t ON t.base = b.base AND t.bulletin_id = b.bulletin_id
