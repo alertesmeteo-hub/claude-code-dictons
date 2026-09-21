@@ -367,13 +367,38 @@ th, td {
   color: #b91c1c;
 }
 
+/* Thème sombre : choix du bouton (data-theme) ; sans choix, on suit le réglage du système. */
+:root {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --couleur-fond: #0f172a;
+  --couleur-texte: #e2e8f0;
+  --couleur-carte: #1e293b;
+  --couleur-bordure: #334155;
+  color-scheme: dark;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --couleur-fond: #0f172a;
     --couleur-texte: #e2e8f0;
     --couleur-carte: #1e293b;
     --couleur-bordure: #334155;
+    color-scheme: dark;
   }
+}
+
+.bouton-theme {
+  background: transparent;
+  color: var(--couleur-texte);
+  border: 1px solid var(--couleur-bordure);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
 }
 
 .pied-site {
