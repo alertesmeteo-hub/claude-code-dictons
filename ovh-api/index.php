@@ -106,6 +106,81 @@ function assurerTablesVigilance($db) {
 	);
 }
 
+// Bulletins de vigilance de l'archive officielle (vigilance-public.meteo.fr, 2001+ → ~2022) : un enregistrement par bulletin.
+// `masque` = OU binaire des phénomènes (1 vent, 2 pluie-inondation, 4 orages, 8 crues, 16 neige-verglas, 32 canicule,
+// 64 grand froid, 128 avalanches, 256 vagues-submersion). Table créée automatiquement au premier appel.
+function assurerTableVigilanceBulletins($db) {
+	$db->query(
+		'CREATE TABLE IF NOT EXISTS vigilance_bulletin (
+			id INT AUTO_INCREMENT PRIMARY KEY,
+			date DATE NOT NULL,
+			heure TIME NOT NULL,
+			producteur VARCHAR(20) NOT NULL,
+			phenomenes VARCHAR(160) NOT NULL,
+			masque SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+			bulletin_id INT NOT NULL,
+			base VARCHAR(30) NOT NULL,
+			fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE KEY uniq_base_bulletin (base, bulletin_id),
+			KEY idx_date_masque (date, masque)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+	);
+}
+
+// Couleur max du jour par département et phénomène (Météo-France : 1 vent, 2 pluie-inondation, 3 orages, 4 crues,
+// 5 neige-verglas, 6 canicule, 7 grand froid, 8 avalanches, 9 vagues-submersion), pour les jours récents (data.gouv).
+function assurerTablePhenomenesJour($db) {
+	$db->query(
+		'CREATE TABLE IF NOT EXISTS vigilance_phenomene_jour (
+			date DATE NOT NULL,
+			departement VARCHAR(10) NOT NULL,
+			phenomene TINYINT NOT NULL,
+			couleur TINYINT NOT NULL,
+			PRIMARY KEY (date, departement, phenomene),
+			KEY idx_phenomene_date (phenomene, date)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+	);
+}
+
+// Texte des bulletins récents (data.gouv, 2022+), lisible et compressé, indexé par date et heure du bulletin.
+function assurerTableTextesRecents($db) {
+	$db->query(
+		'CREATE TABLE IF NOT EXISTS vigilance_texte_recent (
+			date DATE NOT NULL,
+			heure TIME NOT NULL,
+			contenu MEDIUMBLOB NOT NULL,
+			fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (date, heure)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+	);
+}
+
+// Texte intégral des bulletins (compressé : environ 3 fois moins de place) et départements suivis, avec leur statut
+// (1 début de suivi, 2 maintien, 3 fin). Tables créées automatiquement au premier appel.
+function assurerTablesVigilanceTextes($db) {
+	assurerTableVigilanceBulletins($db);
+	$db->query(
+		'CREATE TABLE IF NOT EXISTS vigilance_bulletin_texte (
+			base VARCHAR(30) NOT NULL,
+			bulletin_id INT NOT NULL,
+			contenu MEDIUMBLOB NOT NULL,
+			niveau_max TINYINT NULL,
+			fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (base, bulletin_id)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+	);
+	$db->query(
+		'CREATE TABLE IF NOT EXISTS vigilance_bulletin_dept (
+			base VARCHAR(30) NOT NULL,
+			bulletin_id INT NOT NULL,
+			departement VARCHAR(3) NOT NULL,
+			statut TINYINT NOT NULL,
+			PRIMARY KEY (base, bulletin_id, departement),
+			KEY idx_departement (departement)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+	);
+}
+
 $route = $_GET['route'] ?? '';
 $methode = $_SERVER['REQUEST_METHOD'];
 $db = getDb();
@@ -438,6 +513,327 @@ switch ("$methode:$route") {
 			$compte++;
 		}
 		repondre(['ok' => true, 'compte' => $compte]);
+
+	// ---- Bulletins de l'archive officielle + recherche avancée (voir backfill-vigilance-bulletins.ts) ----
+	case 'POST:vigilance/bulletins':
+		assurerTableVigilanceBulletins($db);
+		$d = corpsJson();
+		$compte = 0;
+		$stmt = $db->prepare(
+			'INSERT INTO vigilance_bulletin (date, heure, producteur, phenomenes, masque, bulletin_id, base) VALUES (?, ?, ?, ?, ?, ?, ?)
+			 ON DUPLICATE KEY UPDATE date=VALUES(date), heure=VALUES(heure), producteur=VALUES(producteur),
+			   phenomenes=VALUES(phenomenes), masque=VALUES(masque), fetched_at=CURRENT_TIMESTAMP'
+		);
+		foreach (($d['bulletins'] ?? []) as $b) {
+			$stmt->bind_param('ssssiis', $b['date'], $b['heure'], $b['producteur'], $b['phenomenes'], $b['masque'], $b['bulletinId'], $b['base']);
+			$stmt->execute();
+			$compte++;
+		}
+		repondre(['ok' => true, 'compte' => $compte]);
+
+	case 'GET:vigilance/bulletins-jour':
+		assurerTableVigilanceBulletins($db);
+		$date = $_GET['date'] ?? '';
+		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) repondre(['erreur' => 'date requise (AAAA-MM-JJ)'], 400);
+		$stmt = $db->prepare(
+			'SELECT date, heure, producteur, phenomenes, masque, bulletin_id AS bulletinId, base
+			 FROM vigilance_bulletin WHERE date = ? ORDER BY heure ASC, id ASC'
+		);
+		$stmt->bind_param('s', $date);
+		$stmt->execute();
+		$liste = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+		// Bulletins récents (data.gouv / API Météo-France, 2022+) : un bulletin par heure de carte.
+		// Identifiant synthétique base « carte », id = AAAAMMJJHHMMSS.
+		assurerTablesVigilance($db);
+		$stmt = $db->prepare(
+			"SELECT heure, MAX(couleur) AS couleurMax, SUM(couleur >= 3) AS nbAlertes
+			 FROM vigilance_carte WHERE date = ? AND echeance = 'J' GROUP BY heure ORDER BY heure ASC"
+		);
+		$stmt->bind_param('s', $date);
+		$stmt->execute();
+		foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $c) {
+			$nomsCouleur = [1 => 'vert', 2 => 'jaune', 3 => 'orange', 4 => 'rouge'];
+			$liste[] = [
+				'date' => $date,
+				'heure' => $c['heure'],
+				'producteur' => 'Carte',
+				'phenomenes' => 'Carte de vigilance — niveau max ' . ($nomsCouleur[(int)$c['couleurMax']] ?? '') . ((int)$c['nbAlertes'] > 0 ? ' (' . (int)$c['nbAlertes'] . ' départements en orange/rouge)' : ''),
+				'masque' => 0,
+				'bulletinId' => (int)(str_replace('-', '', $date) . str_replace(':', '', $c['heure'])),
+				'base' => 'carte',
+			];
+		}
+		repondre($liste);
+
+	// Couleur maximale du jour pour chaque département (toutes époques : archive 2001+ et jours récents), pour la carte de France.
+	case 'GET:vigilance/departements-jour':
+		$date = $_GET['date'] ?? '';
+		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) repondre(['erreur' => 'date requise (AAAA-MM-JJ)'], 400);
+		$db->query(
+			'CREATE TABLE IF NOT EXISTS vigilance_departement_jour (
+				date DATE NOT NULL,
+				departement VARCHAR(10) NOT NULL,
+				couleur TINYINT NOT NULL,
+				fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY (date, departement)
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+		);
+		$stmt = $db->prepare('SELECT departement AS code, couleur FROM vigilance_departement_jour WHERE date = ? ORDER BY departement');
+		$stmt->bind_param('s', $date);
+		$stmt->execute();
+		$deps = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+		// Phénomènes par département (jours récents, 2022+) : [{n: numéro, c: couleur}], du plus grave au moins grave.
+		assurerTablePhenomenesJour($db);
+		$stmt = $db->prepare('SELECT departement, phenomene, couleur FROM vigilance_phenomene_jour WHERE date = ? ORDER BY departement, couleur DESC, phenomene');
+		$stmt->bind_param('s', $date);
+		$stmt->execute();
+		$parDep = [];
+		foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $r) $parDep[$r['departement']][] = ['n' => (int)$r['phenomene'], 'c' => (int)$r['couleur']];
+		foreach ($deps as &$d) $d['phenomenes'] = $parDep[$d['code']] ?? [];
+		unset($d);
+
+		// Bulletins du jour concernant chaque département : cartes récentes (id = AAAAMMJJHHMMSS, base « carte »)
+		// où le département est au moins à la couleur maximale de sa journée (orange ou plus : uniquement orange/rouge),
+		// et bulletins de l'archive officielle qui le citent (texte intégral).
+		assurerTablesVigilance($db);
+		assurerTablesVigilanceTextes($db);
+		$parCode = [];
+		foreach ($deps as $i => $d) $parCode[$d['code']] = $i;
+		$bulletins = [];
+		$stmt = $db->prepare("SELECT heure, departement, couleur FROM vigilance_carte WHERE date = ? AND echeance = 'J' AND couleur >= 2 ORDER BY heure");
+		$stmt->bind_param('s', $date);
+		$stmt->execute();
+		foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $r) {
+			if (!isset($parCode[$r['departement']])) continue;
+			$seuil = $deps[$parCode[$r['departement']]]['couleur'] >= 3 ? 3 : 2;
+			if ((int)$r['couleur'] < $seuil) continue;
+			$bulletins[$r['departement']][] = ['base' => 'carte', 'id' => (int)(str_replace('-', '', $date) . str_replace(':', '', $r['heure'])), 'heure' => $r['heure']];
+		}
+		$stmt = $db->prepare(
+			'SELECT d.departement, d.statut, b.base, b.bulletin_id AS id, b.heure, b.masque, b.producteur FROM vigilance_bulletin b
+			 JOIN vigilance_bulletin_dept d ON d.base = b.base AND d.bulletin_id = b.bulletin_id
+			 WHERE b.date = ? ORDER BY b.heure'
+		);
+		$stmt->bind_param('s', $date);
+		$stmt->execute();
+		$masqueDep = [];
+		foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $r) {
+			$bulletins[$r['departement']][] = ['base' => $r['base'], 'id' => (int)$r['id'], 'heure' => $r['heure']];
+			// Jours d'archive : phénomène(s) des bulletins régionaux qui suivent (début ou maintien) le département.
+			if ($r['producteur'] !== 'CNP' && (int)$r['statut'] <= 2) $masqueDep[$r['departement']] = ($masqueDep[$r['departement']] ?? 0) | (int)$r['masque'];
+		}
+		foreach ($deps as &$d) {
+			$d['bulletins'] = $bulletins[$d['code']] ?? [];
+			if (empty($d['phenomenes']) && !empty($masqueDep[$d['code']])) {
+				// c = 0 : couleur du phénomène inconnue pour cette période (seule la couleur du département l'est).
+				for ($n = 1; $n <= 9; $n++) if ($masqueDep[$d['code']] & (1 << ($n - 1))) $d['phenomenes'][] = ['n' => $n, 'c' => 0];
+			}
+		}
+		unset($d);
+		repondre($deps);
+
+	// Couleur maximale du jour par département et phénomène (1 à 9), jaune ou plus, pour les bulletins récents (2022+).
+	case 'POST:vigilance/phenomene-jour':
+		assurerTablePhenomenesJour($db);
+		$d = corpsJson();
+		$compte = 0;
+		$stmt = $db->prepare(
+			'INSERT INTO vigilance_phenomene_jour (date, departement, phenomene, couleur) VALUES (?, ?, ?, ?)
+			 ON DUPLICATE KEY UPDATE couleur=VALUES(couleur)'
+		);
+		foreach (($d['jours'] ?? []) as $j) {
+			$stmt->bind_param('ssii', $j['date'], $j['departement'], $j['phenomene'], $j['couleur']);
+			$stmt->execute();
+			$compte++;
+		}
+		repondre(['ok' => true, 'compte' => $compte]);
+
+	// Jours de la période dont la couleur nationale correspond, éventuellement restreints à un phénomène (1 à 9).
+	// couleur : '' = orange et rouge ; 2 jaune, 3 orange, 4 rouge (exact). Plafond : 5000 jours par réponse.
+	case 'GET:vigilance/recherche':
+		assurerTableVigilanceBulletins($db);
+		$debut = $_GET['debut'] ?? '';
+		$fin = $_GET['fin'] ?? '';
+		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $debut) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fin) || $debut > $fin) {
+			repondre(['erreur' => 'debut et fin requis (AAAA-MM-JJ, debut <= fin)'], 400);
+		}
+		$couleur = $_GET['couleur'] ?? '';
+		if ($couleur !== '' && !in_array($couleur, ['2', '3', '4'], true)) repondre(['erreur' => 'couleur invalide'], 400);
+		$phenomene = $_GET['phenomene'] ?? '';
+		if ($phenomene !== '' && !preg_match('/^[1-9]$/', $phenomene)) repondre(['erreur' => 'phenomene invalide (1 a 9)'], 400);
+		$departement = $_GET['departement'] ?? '';
+		// Un département, ou plusieurs séparés par des virgules (une région).
+		if ($departement !== '' && !preg_match('/^(\d{2}|2A|2B)(,(\d{2}|2A|2B)){0,19}$/', $departement)) repondre(['erreur' => 'departement invalide'], 400);
+		$listeDeps = $departement === '' ? [] : explode(',', $departement);
+		$marqueursDeps = implode(',', array_fill(0, max(1, count($listeDeps)), '?'));
+		$typesDeps = str_repeat('s', count($listeDeps));
+		$bitPhenomene = $phenomene === '' ? 0 : (1 << ((int)$phenomene - 1)); // filtre appliqué après fusion des sources (archive + jours récents)
+		if ($departement === '') {
+			// France entière : couleur nationale du jour + bulletins du jour.
+			$filtreCouleur = $couleur === '' ? 'n.couleur >= 3' : 'n.couleur = ' . (int)$couleur;
+			$sql = "SELECT n.date, n.couleur, COALESCE(BIT_OR(b.masque), 0) AS masque, COUNT(b.id) AS nbBulletins
+				FROM vigilance_national_jour n LEFT JOIN vigilance_bulletin b ON b.date = n.date
+				WHERE n.date BETWEEN ? AND ? AND $filtreCouleur
+				GROUP BY n.date, n.couleur ORDER BY n.date ASC";
+			$stmt = $db->prepare($sql);
+			$stmt->bind_param('ss', $debut, $fin);
+		} else {
+			// Un département : couleur du département + bulletins qui le citent (nécessite l'import des textes).
+			assurerTablesVigilanceTextes($db);
+			$filtreCouleur = $couleur === '' ? 'dj.couleur >= 3' : 'dj.couleur = ' . (int)$couleur;
+			$sql = "SELECT dj.date, MAX(dj.couleur) AS couleur, COALESCE(BIT_OR(b.masque), 0) AS masque, COUNT(DISTINCT b.id) AS nbBulletins
+				FROM vigilance_departement_jour dj
+				LEFT JOIN vigilance_bulletin_dept d ON d.departement = dj.departement
+				LEFT JOIN vigilance_bulletin b ON b.base = d.base AND b.bulletin_id = d.bulletin_id AND b.date = dj.date
+				WHERE dj.departement IN ($marqueursDeps) AND dj.date BETWEEN ? AND ? AND $filtreCouleur
+				GROUP BY dj.date ORDER BY dj.date ASC";
+			$stmt = $db->prepare($sql);
+			$stmt->bind_param($typesDeps . 'ss', ...array_merge($listeDeps, [$debut, $fin]));
+		}
+		$stmt->execute();
+		$lignes = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+		// Jours récents (data.gouv, 2022+) : phénomènes en jaune ou plus, fusionnés avec ceux de l'archive officielle.
+		assurerTablePhenomenesJour($db);
+		$seuil = $couleur === '2' ? 2 : 3;
+		$filtreDepPh = $departement === '' ? '' : " AND departement IN ($marqueursDeps)";
+		$stmt = $db->prepare(
+			"SELECT date, BIT_OR(1 << (phenomene - 1)) AS m FROM vigilance_phenomene_jour
+			 WHERE date BETWEEN ? AND ? AND couleur >= $seuil$filtreDepPh GROUP BY date"
+		);
+		if ($departement === '') $stmt->bind_param('ss', $debut, $fin);
+		else $stmt->bind_param('ss' . $typesDeps, ...array_merge([$debut, $fin], $listeDeps));
+		$stmt->execute();
+		$masqueRecent = [];
+		foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $r) $masqueRecent[$r['date']] = (int)$r['m'];
+		foreach ($lignes as &$l) $l['masque'] = (int)$l['masque'] | ($masqueRecent[$l['date']] ?? 0);
+		unset($l);
+		if ($bitPhenomene > 0) {
+			$lignes = array_values(array_filter($lignes, function ($l) use ($bitPhenomene) { return ($l['masque'] & $bitPhenomene) > 0; }));
+		}
+		$tronque = count($lignes) > 5000;
+		if ($tronque) $lignes = array_slice($lignes, 0, 5000);
+
+		// Bulletins récents (cartes data.gouv, 2022+) : un bulletin par heure de carte, comptés en plus de l'archive officielle.
+		if ($lignes) {
+			assurerTablesVigilance($db);
+			$filtreDep = $departement === '' ? '' : " AND departement IN ($marqueursDeps)";
+			$stmt = $db->prepare(
+				"SELECT date, COUNT(DISTINCT heure) AS n FROM vigilance_carte
+				 WHERE date BETWEEN ? AND ? AND echeance = 'J'$filtreDep GROUP BY date"
+			);
+			if ($departement === '') $stmt->bind_param('ss', $debut, $fin);
+			else $stmt->bind_param('ss' . $typesDeps, ...array_merge([$debut, $fin], $listeDeps));
+			$stmt->execute();
+			$parJour = [];
+			foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $r) $parJour[$r['date']] = (int)$r['n'];
+			foreach ($lignes as &$l) $l['nbBulletins'] = (int)$l['nbBulletins'] + ($parJour[$l['date']] ?? 0);
+			unset($l);
+		}
+		repondre(['jours' => $lignes, 'tronque' => $tronque]);
+
+	// Bulletins listés mais dont le texte n'a pas encore été récupéré (reprise possible de l'import).
+	case 'GET:vigilance/bulletins-a-recuperer':
+		assurerTablesVigilanceTextes($db);
+		$limite = max(1, min((int)($_GET['limite'] ?? 200), 1000));
+		$res = $db->query(
+			"SELECT b.base, b.bulletin_id AS bulletinId FROM vigilance_bulletin b
+			 LEFT JOIN vigilance_bulletin_texte t ON t.base = b.base AND t.bulletin_id = b.bulletin_id
+			 WHERE t.bulletin_id IS NULL AND b.base NOT LIKE 'carte%' ORDER BY b.date ASC, b.id ASC LIMIT $limite"
+		);
+		$reste = $db->query(
+			'SELECT COUNT(*) AS n FROM vigilance_bulletin b
+			 LEFT JOIN vigilance_bulletin_texte t ON t.base = b.base AND t.bulletin_id = b.bulletin_id WHERE t.bulletin_id IS NULL AND b.base NOT LIKE \'carte%\''
+		)->fetch_assoc();
+		repondre(['bulletins' => $res->fetch_all(MYSQLI_ASSOC), 'restant' => (int)$reste['n']]);
+
+	case 'POST:vigilance/bulletins-textes':
+		assurerTablesVigilanceTextes($db);
+		$d = corpsJson();
+		$compte = 0;
+		$texteStmt = $db->prepare(
+			'INSERT INTO vigilance_bulletin_texte (base, bulletin_id, contenu, niveau_max) VALUES (?, ?, COMPRESS(?), ?)
+			 ON DUPLICATE KEY UPDATE contenu=VALUES(contenu), niveau_max=VALUES(niveau_max), fetched_at=CURRENT_TIMESTAMP'
+		);
+		$supprStmt = $db->prepare('DELETE FROM vigilance_bulletin_dept WHERE base = ? AND bulletin_id = ?');
+		$deptStmt = $db->prepare(
+			'INSERT INTO vigilance_bulletin_dept (base, bulletin_id, departement, statut) VALUES (?, ?, ?, ?)
+			 ON DUPLICATE KEY UPDATE statut=VALUES(statut)'
+		);
+		foreach (($d['textes'] ?? []) as $t) {
+			$niveau = isset($t['niveauMax']) ? (int)$t['niveauMax'] : null;
+			$texteStmt->bind_param('sisi', $t['base'], $t['bulletinId'], $t['texte'], $niveau);
+			$texteStmt->execute();
+			$supprStmt->bind_param('si', $t['base'], $t['bulletinId']);
+			$supprStmt->execute();
+			foreach (($t['departements'] ?? []) as $dep) {
+				if (!preg_match('/^(\d{2}|2A|2B)$/', (string)$dep['code'])) continue;
+				$deptStmt->bind_param('sisi', $t['base'], $t['bulletinId'], $dep['code'], $dep['statut']);
+				$deptStmt->execute();
+			}
+			$compte++;
+		}
+		repondre(['ok' => true, 'compte' => $compte]);
+
+	// Texte lisible des bulletins récents : [{date, heure, texte}].
+	case 'POST:vigilance/textes-recents':
+		assurerTableTextesRecents($db);
+		$d = corpsJson();
+		$compte = 0;
+		$stmt = $db->prepare(
+			'INSERT INTO vigilance_texte_recent (date, heure, contenu) VALUES (?, ?, COMPRESS(?))
+			 ON DUPLICATE KEY UPDATE contenu=VALUES(contenu), fetched_at=CURRENT_TIMESTAMP'
+		);
+		foreach (($d['textes'] ?? []) as $t) {
+			$stmt->bind_param('sss', $t['date'], $t['heure'], $t['texte']);
+			$stmt->execute();
+			$compte++;
+		}
+		repondre(['ok' => true, 'compte' => $compte]);
+
+	// Un bulletin complet (texte décompressé + départements suivis) pour l'afficher sur le site.
+	case 'GET:vigilance/bulletin':
+		assurerTablesVigilanceTextes($db);
+		$base = $_GET['base'] ?? '';
+		$id = (int)($_GET['id'] ?? 0);
+		if (!preg_match('/^\w{1,30}$/', $base) || $id < 1) repondre(['erreur' => 'base et id requis'], 400);
+		if ($base === 'carte') {
+			// Bulletin récent : id = AAAAMMJJHHMMSS, contenu = couleurs par département de cette carte.
+			assurerTablesVigilance($db);
+			$s = sprintf('%014d', $id);
+			$date = substr($s, 0, 4) . '-' . substr($s, 4, 2) . '-' . substr($s, 6, 2);
+			$heure = substr($s, 8, 2) . ':' . substr($s, 10, 2) . ':' . substr($s, 12, 2);
+			$stmt = $db->prepare("SELECT departement AS code, couleur FROM vigilance_carte WHERE date = ? AND heure = ? AND echeance = 'J' ORDER BY departement");
+			$stmt->bind_param('ss', $date, $heure);
+			$stmt->execute();
+			$carte = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+			if (!$carte) repondre(['erreur' => 'bulletin inconnu'], 404);
+			assurerTableTextesRecents($db);
+			$stmt = $db->prepare('SELECT UNCOMPRESS(contenu) AS texte FROM vigilance_texte_recent WHERE date = ? AND heure = ?');
+			$stmt->bind_param('ss', $date, $heure);
+			$stmt->execute();
+			$t = $stmt->get_result()->fetch_assoc();
+			repondre([
+				'date' => $date, 'heure' => $heure, 'producteur' => 'Carte', 'phenomenes' => 'Carte de vigilance',
+				'masque' => 0, 'texte' => $t['texte'] ?? null, 'niveauMax' => (int)max(array_column($carte, 'couleur')),
+				'departements' => [], 'carte' => $carte,
+			]);
+		}
+		$stmt = $db->prepare(
+			'SELECT b.date, b.heure, b.producteur, b.phenomenes, b.masque, UNCOMPRESS(t.contenu) AS texte, t.niveau_max AS niveauMax
+			 FROM vigilance_bulletin b LEFT JOIN vigilance_bulletin_texte t ON t.base = b.base AND t.bulletin_id = b.bulletin_id
+			 WHERE b.base = ? AND b.bulletin_id = ?'
+		);
+		$stmt->bind_param('si', $base, $id);
+		$stmt->execute();
+		$b = $stmt->get_result()->fetch_assoc();
+		if (!$b) repondre(['erreur' => 'bulletin inconnu'], 404);
+		$stmt = $db->prepare('SELECT departement AS code, statut FROM vigilance_bulletin_dept WHERE base = ? AND bulletin_id = ? ORDER BY departement');
+		$stmt->bind_param('si', $base, $id);
+		$stmt->execute();
+		$b['departements'] = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+		repondre($b);
 
 	// ---- Journal des tâches ----
 	case 'GET:sync-logs':

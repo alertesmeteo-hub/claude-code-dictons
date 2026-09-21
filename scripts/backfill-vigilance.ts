@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { ovhApi } from '../lib/db/ovh-api-client';
-import { parseCarteVigilance } from '../lib/meteo/vigilance';
+import { parseCarteVigilance, parsePhenomenesCarte } from '../lib/meteo/vigilance';
+import { texteDepuisCdpTextes } from '../lib/meteo/vigilance-texte-recent';
 
 /**
  * Import ponctuel (à lancer manuellement, pas planifié) de l'historique des bulletins de vigilance
@@ -9,7 +10,8 @@ import { parseCarteVigilance } from '../lib/meteo/vigilance';
  * Source : https://files.data.gouv.fr/meteofrance/data/vigilance/metropole/AAAA/MM/JJ/HHMMSS/
  * Un dossier par bulletin publié (plusieurs par jour : ~6h, 16h, réévaluations en cours d'événement),
  * contenant CDP_CARTE_EXTERNE.json — même format que l'API temps réel (DPVigilance /cartevigilance/encours).
- * Pas de texte de synthèse dans cette archive (seulement un PDF de carte, non exploité ici).
+ * Chaque dossier contient aussi CDP_TEXTES_VIGILANCE.json (texte du bulletin : national, zones, départements),
+ * converti en texte lisible et stocké (date + heure) pour la page du bulletin.
  *
  * Usage :
  *   npm run backfill:vigilance -- --depuis=2022-01-01 --jusqu-a=2022-12-31
@@ -79,7 +81,26 @@ function* joursEntre(depuis: string, jusquA: string): Generator<string> {
   }
 }
 
-async function traiterBulletin(date: string, hhmmss: string): Promise<'ok' | 'ignore'> {
+/** Couleur maximale du jour (échéance J) par département, cumulée sur les bulletins de la journée. */
+type MaxJour = Map<string, number>;
+/** Couleur maximale du jour (échéance J) par « département|phénomène ». */
+type MaxPhenomenes = Map<string, number>;
+
+/** Texte du bulletin (absent pour certains bulletins anciens : ignoré sans erreur). */
+async function enregistrerTexte(date: string, hhmmss: string): Promise<void> {
+  const brut = await get(`${BASE}/${date.replace(/-/g, '/')}/${hhmmss}/CDP_TEXTES_VIGILANCE.json`);
+  if (!brut) return;
+  let texte: string;
+  try {
+    texte = texteDepuisCdpTextes(brut);
+  } catch {
+    return; // fichier illisible : la carte reste importée, sans texte
+  }
+  if (!texte) return;
+  await ovhApi.vigilanceTextesRecentsEnregistrer([{ date, heure: `${hhmmss.slice(0, 2)}:${hhmmss.slice(2, 4)}:${hhmmss.slice(4, 6)}`, texte }]);
+}
+
+async function traiterBulletin(date: string, hhmmss: string, maxJour: MaxJour, maxPhen: MaxPhenomenes): Promise<'ok' | 'ignore'> {
   const url = `${BASE}/${date.replace(/-/g, '/')}/${hhmmss}/CDP_CARTE_EXTERNE.json`;
   const brut = await get(url);
   if (!brut) return 'ignore';
@@ -87,6 +108,13 @@ async function traiterBulletin(date: string, hhmmss: string): Promise<'ok' | 'ig
   const carte = parseCarteVigilance(brut);
   const heure = `${hhmmss.slice(0, 2)}:${hhmmss.slice(2, 4)}:${hhmmss.slice(4, 6)}`;
   await ovhApi.vigilanceEnregistrer(date, heure, carte, null);
+  await enregistrerTexte(date, hhmmss);
+  for (const p of parsePhenomenesCarte(brut)) {
+    if (p.echeance !== 'J') continue;
+    const cle = `${p.departement}|${p.phenomene}`;
+    maxPhen.set(cle, Math.max(maxPhen.get(cle) ?? 0, p.couleur));
+  }
+  for (const c of carte) if (c.echeance === 'J') maxJour.set(c.departement, Math.max(maxJour.get(c.departement) ?? 0, c.couleur));
   return 'ok';
 }
 
@@ -113,9 +141,11 @@ async function main() {
       if (bulletins.length === 0) {
         console.warn(`${date} : page trouvée mais aucun bulletin détecté (format de listing inattendu ?)`);
       }
+      const maxJour: MaxJour = new Map();
+      const maxPhen: MaxPhenomenes = new Map();
       for (const hhmmss of bulletins) {
         try {
-          const resultat = await traiterBulletin(date, hhmmss);
+          const resultat = await traiterBulletin(date, hhmmss, maxJour, maxPhen);
           if (resultat === 'ok') bulletinsImportes++;
         } catch (e) {
           echecs++;
@@ -123,6 +153,22 @@ async function main() {
         }
         await pause(PAUSE_ENTRE_APPELS_MS);
       }
+      if (maxJour.size > 0) {
+        // Alimente les calendriers du site (national et par département) : couleur max du jour.
+        const national = Math.max(...maxJour.values());
+        await ovhApi.vigilanceNationalEnregistrer([{ date, couleur: national as 1 | 2 | 3 | 4, commentaire: null }]);
+        await ovhApi.vigilanceDepartementHistoriqueEnregistrer(
+          [...maxJour].map(([departement, couleur]) => ({ date, departement, couleur: couleur as 1 | 2 | 3 | 4 })),
+        );
+      }
+      // Phénomènes en jaune ou plus (le vert n'est pas stocké) : alimente le filtre « phénomène » de la recherche.
+      const phenomenes = [...maxPhen]
+        .filter(([, couleur]) => couleur >= 2)
+        .map(([cle, couleur]) => {
+          const [departement, phenomene] = cle.split('|');
+          return { date, departement, phenomene: Number(phenomene), couleur: couleur as 2 | 3 | 4 };
+        });
+      if (phenomenes.length > 0) await ovhApi.vigilancePhenomenesJourEnregistrer(phenomenes);
       joursTraites++;
       if (joursTraites % 30 === 0) console.log(`… ${date} (${joursTraites} jours traités, ${bulletinsImportes} bulletins importés)`);
     } catch (e) {
