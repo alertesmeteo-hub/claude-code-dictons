@@ -12,6 +12,7 @@
     "cron:generation-jour": "tsx scripts/cron-generation-jour.ts",
     "cron:extremes-meteo": "tsx scripts/cron-extremes-meteo.ts",
     "cron:observations-mf": "tsx scripts/cron-observations-mf.ts",
+    "cron:observations-6m": "tsx scripts/cron-observations-6m.ts",
     "cron:vigilance-meteo": "tsx scripts/cron-vigilance-meteo.ts",
     "backfill:vigilance": "tsx scripts/backfill-vigilance.ts",
     "backfill:vigilance-national": "tsx scripts/backfill-vigilance-national.ts",
