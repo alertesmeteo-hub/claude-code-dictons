@@ -160,7 +160,7 @@ function archiver(parStation: Map<string, Observation[]>) {
 
   // Purge des jours trop anciens, puis fichiers « recent » par station.
   const racine = path.join(ARCHIVE, 'jours');
-  const jours = readdirSync(racine).filter((j) => /^d{4}-d{2}-d{2}$/.test(j)).sort();
+  const jours = readdirSync(racine).filter((j) => /^\d{4}-\d{2}-\d{2}$/.test(j)).sort();
   for (const j of jours.slice(0, Math.max(0, jours.length - JOURS_CONSERVES))) rmSync(path.join(racine, j), { recursive: true, force: true });
   const recent = new Map<string, Array<{ date: string } & Quotidien>>();
   for (const j of jours.slice(-JOURS_CONSERVES)) {
