@@ -120,63 +120,107 @@ const ecrire = (fichier: string, contenu: unknown) => {
   renameSync(tmp, fichier);
 };
 
-/** Cumule les relevés horaires reçus dans l'archive par jour UTC et par département, puis met à jour valeurs quotidiennes et fichiers « recent ». */
-function archiver(parStation: Map<string, Observation[]>) {
-  const parJour = new Map<string, Map<string, Map<string, Map<string, Ligne>>>>(); // date → dép. → station → heure → ligne
+
+/** Valeurs quotidiennes par jour UTC et station, cumulées pendant l'exécution (petit : une entrée par station et par jour). */
+const quotidiensParJour = new Map<string, Record<string, Quotidien>>();
+
+/**
+ * Cumule dans l'archive les relevés horaires d'un département (traité au fil de l'eau pour limiter la mémoire) :
+ * un fichier par jour UTC, fusionné avec celui déjà présent (l'API ne remonte que ~6 jours).
+ */
+function archiverDepartement(dep: string, parStation: Map<string, Observation[]>) {
+  const parJour = new Map<string, Map<string, Map<string, Ligne>>>(); // date → station → heure → ligne
   for (const [id, obs] of parStation) {
     for (const o of obs) {
       if (o.t == null) continue;
       const jour = o.validity_time.slice(0, 10);
-      const dep = id.slice(0, 2);
-      const d = parJour.get(jour) ?? new Map();
-      const dd = d.get(dep) ?? new Map();
-      const st = dd.get(id) ?? new Map();
+      const d = parJour.get(jour) ?? new Map<string, Map<string, Ligne>>();
+      const st = d.get(id) ?? new Map<string, Ligne>();
       st.set(o.validity_time, ligne(o));
-      dd.set(id, st);
-      d.set(dep, dd);
+      d.set(id, st);
       parJour.set(jour, d);
     }
   }
-  for (const [jour, deps] of parJour) {
-    const quoti: Record<string, Quotidien> = {};
-    for (const [dep, stations] of deps) {
-      const fichier = path.join(ARCHIVE, 'jours', jour, `${dep}.json`);
-      const existant: Record<string, Ligne[]> = existsSync(fichier) ? JSON.parse(readFileSync(fichier, 'utf8')) : {};
-      const sortie: Record<string, Ligne[]> = {};
-      for (const id of new Set([...Object.keys(existant), ...stations.keys()])) {
-        const m = new Map<string, Ligne>((existant[id] ?? []).map((l) => [l[0], l]));
-        for (const [h, l] of stations.get(id) ?? []) m.set(h, l);
-        const tri = [...m.values()].sort((a, b) => a[0].localeCompare(b[0]));
-        sortie[id] = tri;
-        quoti[id] = quotidien(tri);
-      }
-      ecrire(fichier, sortie);
+  for (const [jour, stations] of parJour) {
+    const fichier = path.join(ARCHIVE, 'jours', jour, `${dep}.json`);
+    const existant: Record<string, Ligne[]> = existsSync(fichier) ? JSON.parse(readFileSync(fichier, 'utf8')) : {};
+    const sortie: Record<string, Ligne[]> = {};
+    const quoti = quotidiensParJour.get(jour) ?? {};
+    for (const id of new Set([...Object.keys(existant), ...stations.keys()])) {
+      const m = new Map<string, Ligne>((existant[id] ?? []).map((l) => [l[0], l]));
+      for (const [h, l] of stations.get(id) ?? []) m.set(h, l);
+      const tri = [...m.values()].sort((a, b) => a[0].localeCompare(b[0]));
+      sortie[id] = tri;
+      quoti[id] = quotidien(tri);
     }
-    // Les stations d'autres exécutions déjà présentes dans quotidien.json sont conservées.
+    ecrire(fichier, sortie);
+    quotidiensParJour.set(jour, quoti);
+  }
+}
+
+/** Écrit les valeurs quotidiennes de chaque jour touché, purge les jours trop anciens et régénère les fichiers « recent » par station. */
+function finaliserArchive() {
+  for (const [jour, quoti] of quotidiensParJour) {
     const fq = path.join(ARCHIVE, 'jours', jour, 'quotidien.json');
     const ancien: Record<string, Quotidien> = existsSync(fq) ? JSON.parse(readFileSync(fq, 'utf8')) : {};
     ecrire(fq, { ...ancien, ...quoti });
   }
-
-  // Purge des jours trop anciens, puis fichiers « recent » par station.
   const racine = path.join(ARCHIVE, 'jours');
   const jours = readdirSync(racine).filter((j) => /^\d{4}-\d{2}-\d{2}$/.test(j)).sort();
   for (const j of jours.slice(0, Math.max(0, jours.length - JOURS_CONSERVES))) rmSync(path.join(racine, j), { recursive: true, force: true });
   const recent = new Map<string, Array<{ date: string } & Quotidien>>();
   for (const j of jours.slice(-JOURS_CONSERVES)) {
-    const q = JSON.parse(readFileSync(path.join(racine, j, 'quotidien.json'), 'utf8')) as Record<string, Quotidien>;
+    const fq = path.join(racine, j, 'quotidien.json');
+    if (!existsSync(fq)) continue;
+    const q = JSON.parse(readFileSync(fq, 'utf8')) as Record<string, Quotidien>;
     for (const [id, v] of Object.entries(q)) (recent.get(id) ?? recent.set(id, []).get(id)!).push({ date: j, ...v });
   }
   for (const [id, jj] of recent) ecrire(path.join(ARCHIVE, 'recent', `${id}.json`), { num_poste: id, days: jj });
-  console.log(`Archive : ${parJour.size} jour(s) mis à jour, ${recent.size} stations dans recent/`);
+  console.log(`Archive : ${quotidiensParJour.size} jour(s) mis à jour, ${recent.size} stations dans recent/`);
+}
+
+/** Ligne de la carte pour une station : dernière observation, tendances 1 h / 24 h, mini et maxi du jour (heure de Paris). */
+function ligneCarte(s: Station, liste: Observation[]) {
+  const obs = liste.filter((o) => o.t != null).sort((a, b) => Date.parse(b.validity_time) - Date.parse(a.validity_time));
+  const der = obs[0];
+  if (!der) return null;
+  const ts = Date.parse(der.validity_time);
+  const plusProche = (cible: number, min: number, max: number) =>
+    obs.slice(1).filter((o) => { const a = ts - Date.parse(o.validity_time); return a >= min && a <= max; })
+      .sort((a, b) => Math.abs(ts - Date.parse(a.validity_time) - cible) - Math.abs(ts - Date.parse(b.validity_time) - cible))[0];
+  const prec = plusProche(3600e3, 1800e3, 8100e3);
+  const j24 = plusProche(86400e3, 72000e3, 93600e3);
+  const jour = jourParis(der.validity_time);
+  const duJour = obs.filter((o) => jourParis(o.validity_time) === jour);
+  const bas = duJour.map((o) => kelvinEnC(o.tn ?? o.t!));
+  const haut = duJour.map((o) => kelvinEnC(o.tx ?? o.t!));
+  const t = kelvinEnC(der.t!);
+  const td = der.td != null ? kelvinEnC(der.td) : null;
+  const raf = der.fxy ?? der.fxi;
+  return {
+    source: 'MF', id: s.id, name: s.nom, lat: arrondi(s.lat, 6), lon: arrondi(s.lon, 6), time: der.validity_time,
+    temperature: t, dewpoint: td,
+    humidity: der.u != null ? Math.round(der.u) : td != null ? humidite(t, td) : null,
+    wind_dir: der.dd != null ? Math.round(der.dd) : null,
+    wind_kmh: der.ff != null ? arrondi(der.ff * 3.6) : null,
+    gust_kmh: raf != null ? arrondi(raf * 3.6) : null,
+    pressure: der.pmer != null ? arrondi(der.pmer / 100) : null,
+    visibility_km: der.vv != null ? arrondi(der.vv / 1000) : null,
+    weather: null, weather_code: null, flight_cat: null, clouds: null, raw: null,
+    temp_trend: prec ? arrondi(t - kelvinEnC(prec.t!)) : null,
+    temp_trend_24h: j24 ? arrondi(t - kelvinEnC(j24.t!)) : null,
+    tmin: bas.length ? Math.min(...bas) : null,
+    tmax: haut.length ? Math.max(...haut) : null,
+  };
 }
 
 async function main() {
   const stations = await listerStations();
   const departements = [...new Set([...stations.keys()].map((id) => id.slice(0, 2)))].filter((p) => /^\d\d$/.test(p) && Number(p) <= 95).sort();
-  const parStation = new Map<string, Observation[]>();
+  const lignes: NonNullable<ReturnType<typeof ligneCarte>>[] = [];
   let echecs = 0;
 
+  // Un département à la fois : ~6 jours de relevés par station pèsent lourd, on libère la mémoire entre deux départements.
   for (const dep of departements) {
     const ecritures = VARIANTES_DEPARTEMENT[dep] ?? [dep, dep.replace(/^0/, '')];
     const cumul = dep === '20';
@@ -184,11 +228,17 @@ async function main() {
     for (const e of [...new Set(ecritures)]) {
       try {
         const obs = JSON.parse(await get(`${DPPAQUET}/paquet/horaire?id-departement=${e}&format=json`)) as Observation[];
+        const parStation = new Map<string, Observation[]>();
         for (const o of obs) {
           if (!stations.has(o.geo_id_insee)) continue;
           const l = parStation.get(o.geo_id_insee) ?? [];
           l.push(o);
           parStation.set(o.geo_id_insee, l);
+        }
+        archiverDepartement(dep, parStation);
+        for (const [id, liste] of parStation) {
+          const l = ligneCarte(stations.get(id)!, liste);
+          if (l) lignes.push(l);
         }
         accepte = true;
         if (!cumul) break;
@@ -201,45 +251,7 @@ async function main() {
     await pause(PAUSE_ENTRE_APPELS_MS);
   }
 
-  archiver(parStation);
-
-  const lignes = [];
-  for (const [id, liste] of parStation) {
-    const obs = liste.filter((o) => o.t != null).sort((a, b) => Date.parse(b.validity_time) - Date.parse(a.validity_time));
-    const der = obs[0];
-    if (!der) continue;
-    const ts = Date.parse(der.validity_time);
-    // Tendance : observation la plus proche d'1 h plus tôt (entre 30 min et 2 h 15).
-    const prec = obs.slice(1).filter((o) => { const a = ts - Date.parse(o.validity_time); return a >= 1800e3 && a <= 8100e3; })
-      .sort((a, b) => Math.abs(ts - Date.parse(a.validity_time) - 3600e3) - Math.abs(ts - Date.parse(b.validity_time) - 3600e3))[0];
-    // Variation sur ~24 h : observation la plus proche d'il y a 24 h (entre 20 h et 26 h).
-    const j24 = obs.slice(1).filter((o) => { const a = ts - Date.parse(o.validity_time); return a >= 72000e3 && a <= 93600e3; })
-      .sort((a, b) => Math.abs(ts - Date.parse(a.validity_time) - 86400e3) - Math.abs(ts - Date.parse(b.validity_time) - 86400e3))[0];
-    // Mini / maxi du jour (heure de Paris) : extrêmes horaires tn / tx, à défaut la température.
-    const jour = jourParis(der.validity_time);
-    const duJour = obs.filter((o) => jourParis(o.validity_time) === jour);
-    const bas = duJour.map((o) => kelvinEnC(o.tn ?? o.t!));
-    const haut = duJour.map((o) => kelvinEnC(o.tx ?? o.t!));
-    const t = kelvinEnC(der.t!);
-    const td = der.td != null ? kelvinEnC(der.td) : null;
-    const s = stations.get(id)!;
-    const raf = der.fxy ?? der.fxi;
-    lignes.push({
-      source: 'MF', id, name: s.nom, lat: arrondi(s.lat, 6), lon: arrondi(s.lon, 6), time: der.validity_time,
-      temperature: t, dewpoint: td,
-      humidity: der.u != null ? Math.round(der.u) : td != null ? humidite(t, td) : null,
-      wind_dir: der.dd != null ? Math.round(der.dd) : null,
-      wind_kmh: der.ff != null ? arrondi(der.ff * 3.6) : null,
-      gust_kmh: raf != null ? arrondi(raf * 3.6) : null,
-      pressure: der.pmer != null ? arrondi(der.pmer / 100) : null,
-      visibility_km: der.vv != null ? arrondi(der.vv / 1000) : null,
-      weather: null, weather_code: null, flight_cat: null, clouds: null, raw: null,
-      temp_trend: prec ? arrondi(t - kelvinEnC(prec.t!)) : null,
-      temp_trend_24h: j24 ? arrondi(t - kelvinEnC(j24.t!)) : null,
-      tmin: bas.length ? Math.min(...bas) : null,
-      tmax: haut.length ? Math.max(...haut) : null,
-    });
-  }
+  finaliserArchive();
   if (lignes.length < 500) throw new Error(`Trop peu de stations (${lignes.length}) : fichier existant conservé`);
 
   mkdirSync(path.dirname(SORTIE), { recursive: true });
@@ -248,5 +260,6 @@ async function main() {
   renameSync(tmp, SORTIE);
   console.log(`${lignes.length} stations écrites dans ${SORTIE} (${echecs} départements en échec)`);
 }
+
 
 main().catch((e) => { console.error(e); process.exit(1); });
