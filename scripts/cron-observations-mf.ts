@@ -93,7 +93,7 @@ function ligne(o: Observation): Ligne {
   const raf = o.fxy ?? o.fxi;
   return [
     o.validity_time, c(o.t), c(o.td), o.u != null ? Math.round(o.u) : null, o.dd != null ? Math.round(o.dd) : null,
-    o.ff != null ? arrondi(o.ff * 3.6) : null, raf != null ? arrondi(raf * 3.6) : null, o.rr1, o.pmer != null ? arrondi(o.pmer / 100) : null,
+    o.ff != null ? arrondi(o.ff * 3.6) : null, raf != null ? arrondi(raf * 3.6) : null, o.rr1 != null ? Math.max(0, o.rr1) : null, o.pmer != null ? arrondi(o.pmer / 100) : null,
     o.vv != null ? arrondi(o.vv / 1000) : null, o.insolh, c(o.tn), c(o.tx),
   ];
 }
