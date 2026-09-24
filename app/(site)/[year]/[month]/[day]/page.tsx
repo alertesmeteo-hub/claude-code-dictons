@@ -6,6 +6,7 @@ import MeteoSoleil from '@/components/MeteoSoleil';
 import { fetesPopulaires } from '@/lib/calculs/fetes-populaires';
 import Partage from '@/components/Partage';
 import NavigationJour from '@/components/NavigationJour';
+import NewsletterBrevo from '@/components/NewsletterBrevo';
 
 interface Params {
   year: string;
@@ -267,6 +268,7 @@ export default async function PageJour({ params }: { params: Promise<Params> }) 
       </section>
 
       <Partage titre={`Dictons et proverbes du jour — ${date.getDate()} ${MOIS_LONGS[date.getMonth()]} ${date.getFullYear()}`} />
+      <NewsletterBrevo />
     </main>
   );
 }
