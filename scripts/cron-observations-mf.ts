@@ -29,6 +29,7 @@ interface Observation {
   t: number | null; td: number | null; u: number | null;
   dd: number | null; ff: number | null; fxy: number | null; fxi: number | null;
   pmer: number | null; vv: number | null;
+  tn: number | null; tx: number | null;
 }
 
 const jourParis = (iso: string) =>
