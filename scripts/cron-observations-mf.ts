@@ -31,6 +31,9 @@ interface Observation {
   pmer: number | null; vv: number | null;
 }
 
+const jourParis = (iso: string) =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
+
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const kelvinEnC = (k: number) => Math.round((k - 273.15) * 10) / 10;
 const arrondi = (v: number, n = 1) => Math.round(v * 10 ** n) / 10 ** n;
@@ -112,6 +115,14 @@ async function main() {
     // Tendance : observation la plus proche d'1 h plus tôt (entre 30 min et 2 h 15).
     const prec = obs.slice(1).filter((o) => { const a = ts - Date.parse(o.validity_time); return a >= 1800e3 && a <= 8100e3; })
       .sort((a, b) => Math.abs(ts - Date.parse(a.validity_time) - 3600e3) - Math.abs(ts - Date.parse(b.validity_time) - 3600e3))[0];
+    // Variation sur ~24 h : observation la plus proche d'il y a 24 h (entre 20 h et 26 h).
+    const j24 = obs.slice(1).filter((o) => { const a = ts - Date.parse(o.validity_time); return a >= 72000e3 && a <= 93600e3; })
+      .sort((a, b) => Math.abs(ts - Date.parse(a.validity_time) - 86400e3) - Math.abs(ts - Date.parse(b.validity_time) - 86400e3))[0];
+    // Mini / maxi du jour (heure de Paris) : extrêmes horaires tn / tx, à défaut la température.
+    const jour = jourParis(der.validity_time);
+    const duJour = obs.filter((o) => jourParis(o.validity_time) === jour);
+    const bas = duJour.map((o) => kelvinEnC(o.tn ?? o.t!));
+    const haut = duJour.map((o) => kelvinEnC(o.tx ?? o.t!));
     const t = kelvinEnC(der.t!);
     const td = der.td != null ? kelvinEnC(der.td) : null;
     const s = stations.get(id)!;
@@ -127,6 +138,9 @@ async function main() {
       visibility_km: der.vv != null ? arrondi(der.vv / 1000) : null,
       weather: null, weather_code: null, flight_cat: null, clouds: null, raw: null,
       temp_trend: prec ? arrondi(t - kelvinEnC(prec.t!)) : null,
+      temp_trend_24h: j24 ? arrondi(t - kelvinEnC(j24.t!)) : null,
+      tmin: bas.length ? Math.min(...bas) : null,
+      tmax: haut.length ? Math.max(...haut) : null,
     });
   }
   if (lignes.length < 500) throw new Error(`Trop peu de stations (${lignes.length}) : fichier existant conservé`);
