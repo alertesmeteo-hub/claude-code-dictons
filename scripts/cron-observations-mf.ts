@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 /**
@@ -13,6 +13,12 @@ import path from 'node:path';
  * La donnée est horaire : une exécution par heure suffit. Le 6 minutes n'existe que station par station
  * (2 000 appels), au-delà du quota de l'API.
  *
+ * Archive (consultée par le module WordPress « Climatologie mensuelle », CORS ouvert) :
+ *  - jours/<AAAA-MM-JJ>/<département>.json : relevés horaires du jour UTC par station, cumulés d'une exécution à l'autre
+ *    (l'API ne donne que 24 h) ; ligne = [heure UTC ISO, T, Td, HR, dd, ff km/h, rafale km/h, RR1 mm, pmer hPa, vv km, insolation min, Tn, Tx] ;
+ *  - jours/<date>/quotidien.json : valeurs quotidiennes par station (tx, tn, rr, insol_h, n = nombre de relevés) ;
+ *  - recent/<station>.json : jours conservés d'une station (compléments de la climatologie quotidienne, publiée avec retard).
+ *
  * Sortie : OBSERVATIONS_OUT (défaut /var/www/observations/stations.json), écrite de façon atomique.
  */
 
@@ -20,6 +26,8 @@ const DPOBS = 'https://public-api.meteofrance.fr/public/DPObs/v1';
 const DPPAQUET = 'https://public-api.meteofrance.fr/public/DPPaquetObs/v1';
 const PAUSE_ENTRE_APPELS_MS = 1500;
 const SORTIE = process.env.OBSERVATIONS_OUT || '/var/www/observations/stations.json';
+const ARCHIVE = path.dirname(SORTIE);
+const JOURS_CONSERVES = 120;
 const VARIANTES_DEPARTEMENT: Record<string, string[]> = { '20': ['2A', '2B', '20'] };
 
 interface Station { id: string; nom: string; lat: number; lon: number }
@@ -29,7 +37,7 @@ interface Observation {
   t: number | null; td: number | null; u: number | null;
   dd: number | null; ff: number | null; fxy: number | null; fxi: number | null;
   pmer: number | null; vv: number | null;
-  tn: number | null; tx: number | null;
+  tn: number | null; tx: number | null; rr1: number | null; insolh: number | null;
 }
 
 const jourParis = (iso: string) =>
@@ -77,6 +85,92 @@ async function listerStations(): Promise<Map<string, Station>> {
 /** Humidité relative (%) depuis température et point de rosée (°C), formule de Magnus. */
 const humidite = (t: number, td: number) => Math.round(100 * Math.exp((17.625 * td) / (243.04 + td) - (17.625 * t) / (243.04 + t)));
 
+type Ligne = [string, number | null, number | null, number | null, number | null, number | null, number | null, number | null, number | null, number | null, number | null, number | null, number | null];
+interface Quotidien { tx: number | null; tn: number | null; rr: number | null; insol_h: number | null; n: number }
+
+function ligne(o: Observation): Ligne {
+  const c = (k: number | null) => (k != null ? kelvinEnC(k) : null);
+  const raf = o.fxy ?? o.fxi;
+  return [
+    o.validity_time, c(o.t), c(o.td), o.u != null ? Math.round(o.u) : null, o.dd != null ? Math.round(o.dd) : null,
+    o.ff != null ? arrondi(o.ff * 3.6) : null, raf != null ? arrondi(raf * 3.6) : null, o.rr1, o.pmer != null ? arrondi(o.pmer / 100) : null,
+    o.vv != null ? arrondi(o.vv / 1000) : null, o.insolh, c(o.tn), c(o.tx),
+  ];
+}
+
+function quotidien(lignes: Ligne[]): Quotidien {
+  const nums = (i: number) => lignes.map((l) => l[i]).filter((v): v is number => v != null);
+  const haut = [...nums(12), ...nums(1)];
+  const bas = [...nums(11), ...nums(1)];
+  const pluie = nums(7);
+  const soleil = nums(10);
+  return {
+    tx: haut.length ? Math.max(...haut) : null,
+    tn: bas.length ? Math.min(...bas) : null,
+    rr: pluie.length ? arrondi(pluie.reduce((a, b) => a + b, 0)) : null,
+    insol_h: soleil.length ? arrondi(soleil.reduce((a, b) => a + b, 0) / 60) : null,
+    n: lignes.length,
+  };
+}
+
+const ecrire = (fichier: string, contenu: unknown) => {
+  mkdirSync(path.dirname(fichier), { recursive: true });
+  const tmp = `${fichier}.tmp`;
+  writeFileSync(tmp, JSON.stringify(contenu));
+  renameSync(tmp, fichier);
+};
+
+/** Cumule les relevés horaires reçus dans l'archive par jour UTC et par département, puis met à jour valeurs quotidiennes et fichiers « recent ». */
+function archiver(parStation: Map<string, Observation[]>) {
+  const parJour = new Map<string, Map<string, Map<string, Map<string, Ligne>>>>(); // date → dép. → station → heure → ligne
+  for (const [id, obs] of parStation) {
+    for (const o of obs) {
+      if (o.t == null) continue;
+      const jour = o.validity_time.slice(0, 10);
+      const dep = id.slice(0, 2);
+      const d = parJour.get(jour) ?? new Map();
+      const dd = d.get(dep) ?? new Map();
+      const st = dd.get(id) ?? new Map();
+      st.set(o.validity_time, ligne(o));
+      dd.set(id, st);
+      d.set(dep, dd);
+      parJour.set(jour, d);
+    }
+  }
+  for (const [jour, deps] of parJour) {
+    const quoti: Record<string, Quotidien> = {};
+    for (const [dep, stations] of deps) {
+      const fichier = path.join(ARCHIVE, 'jours', jour, `${dep}.json`);
+      const existant: Record<string, Ligne[]> = existsSync(fichier) ? JSON.parse(readFileSync(fichier, 'utf8')) : {};
+      const sortie: Record<string, Ligne[]> = {};
+      for (const id of new Set([...Object.keys(existant), ...stations.keys()])) {
+        const m = new Map<string, Ligne>((existant[id] ?? []).map((l) => [l[0], l]));
+        for (const [h, l] of stations.get(id) ?? []) m.set(h, l);
+        const tri = [...m.values()].sort((a, b) => a[0].localeCompare(b[0]));
+        sortie[id] = tri;
+        quoti[id] = quotidien(tri);
+      }
+      ecrire(fichier, sortie);
+    }
+    // Les stations d'autres exécutions déjà présentes dans quotidien.json sont conservées.
+    const fq = path.join(ARCHIVE, 'jours', jour, 'quotidien.json');
+    const ancien: Record<string, Quotidien> = existsSync(fq) ? JSON.parse(readFileSync(fq, 'utf8')) : {};
+    ecrire(fq, { ...ancien, ...quoti });
+  }
+
+  // Purge des jours trop anciens, puis fichiers « recent » par station.
+  const racine = path.join(ARCHIVE, 'jours');
+  const jours = readdirSync(racine).filter((j) => /^d{4}-d{2}-d{2}$/.test(j)).sort();
+  for (const j of jours.slice(0, Math.max(0, jours.length - JOURS_CONSERVES))) rmSync(path.join(racine, j), { recursive: true, force: true });
+  const recent = new Map<string, Array<{ date: string } & Quotidien>>();
+  for (const j of jours.slice(-JOURS_CONSERVES)) {
+    const q = JSON.parse(readFileSync(path.join(racine, j, 'quotidien.json'), 'utf8')) as Record<string, Quotidien>;
+    for (const [id, v] of Object.entries(q)) (recent.get(id) ?? recent.set(id, []).get(id)!).push({ date: j, ...v });
+  }
+  for (const [id, jj] of recent) ecrire(path.join(ARCHIVE, 'recent', `${id}.json`), { num_poste: id, days: jj });
+  console.log(`Archive : ${parJour.size} jour(s) mis à jour, ${recent.size} stations dans recent/`);
+}
+
 async function main() {
   const stations = await listerStations();
   const departements = [...new Set([...stations.keys()].map((id) => id.slice(0, 2)))].filter((p) => /^\d\d$/.test(p) && Number(p) <= 95).sort();
@@ -106,6 +200,8 @@ async function main() {
     if (!accepte) { echecs++; console.warn(`Département ${dep} : échec`); }
     await pause(PAUSE_ENTRE_APPELS_MS);
   }
+
+  archiver(parStation);
 
   const lignes = [];
   for (const [id, liste] of parStation) {
