@@ -27,7 +27,7 @@ const DPPAQUET = 'https://public-api.meteofrance.fr/public/DPPaquetObs/v1';
 const PAUSE_ENTRE_APPELS_MS = 1500;
 const SORTIE = process.env.OBSERVATIONS_OUT || '/var/www/observations/stations.json';
 const ARCHIVE = path.dirname(SORTIE);
-const JOURS_CONSERVES = 120;
+const JOURS_CONSERVES = 36500; // pas horaire : conservé sans limite (copie de sauvegarde dans la base OVH)
 const VARIANTES_DEPARTEMENT: Record<string, string[]> = { '20': ['2A', '2B', '20'] };
 
 interface Station { id: string; nom: string; lat: number; lon: number }

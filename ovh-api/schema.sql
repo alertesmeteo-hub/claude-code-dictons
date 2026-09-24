@@ -153,3 +153,13 @@ CREATE TABLE IF NOT EXISTS vigilance_bulletin_dept (
   PRIMARY KEY (base, bulletin_id, departement),
   KEY idx_departement (departement)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Sauvegarde de l archive horaire Meteo-France (creee automatiquement par ovh-api/index.php, assurerTableObsHoraire)
+CREATE TABLE IF NOT EXISTS obs_horaire_jour (
+  date DATE NOT NULL,
+  departement VARCHAR(3) NOT NULL,
+  nb_stations SMALLINT NOT NULL DEFAULT 0,
+  contenu MEDIUMBLOB NOT NULL,
+  fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (date, departement)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

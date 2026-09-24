@@ -155,6 +155,21 @@ function assurerTableTextesRecents($db) {
 	);
 }
 
+// Copie de sauvegarde de l'archive des relevés horaires Météo-France (VPS) : un bloc compressé par jour UTC et par
+// département (JSON { station: [[heure ISO, T, Td, HR, dd, ff, rafale, RR, pmer, vv, insolation, Tn, Tx], …] }).
+function assurerTableObsHoraire($db) {
+	$db->query(
+		'CREATE TABLE IF NOT EXISTS obs_horaire_jour (
+			date DATE NOT NULL,
+			departement VARCHAR(3) NOT NULL,
+			nb_stations SMALLINT NOT NULL DEFAULT 0,
+			contenu MEDIUMBLOB NOT NULL,
+			fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (date, departement)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+	);
+}
+
 // Texte intégral des bulletins (compressé : environ 3 fois moins de place) et départements suivis, avec leur statut
 // (1 début de suivi, 2 maintien, 3 fin). Tables créées automatiquement au premier appel.
 function assurerTablesVigilanceTextes($db) {
@@ -842,6 +857,45 @@ switch ("$methode:$route") {
 			$compte++;
 		}
 		repondre(['ok' => true, 'compte' => $compte]);
+
+	// Sauvegarde des relevés horaires : [{date, departement, nb_stations, contenu}] (contenu = JSON en texte, compressé ici).
+	case 'POST:observations/horaire-jour':
+		assurerTableObsHoraire($db);
+		$d = corpsJson();
+		$compte = 0;
+		$stmt = $db->prepare(
+			'INSERT INTO obs_horaire_jour (date, departement, nb_stations, contenu) VALUES (?, ?, ?, COMPRESS(?))
+			 ON DUPLICATE KEY UPDATE nb_stations=VALUES(nb_stations), contenu=VALUES(contenu), fetched_at=CURRENT_TIMESTAMP'
+		);
+		foreach (($d['jours'] ?? []) as $j) {
+			if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)($j['date'] ?? '')) || !preg_match('/^\w{2,3}$/', (string)($j['departement'] ?? ''))) continue;
+			$nb = (int)($j['nb_stations'] ?? 0);
+			$stmt->bind_param('ssis', $j['date'], $j['departement'], $nb, $j['contenu']);
+			$stmt->execute();
+			$compte++;
+		}
+		repondre(['ok' => true, 'compte' => $compte]);
+
+	// Relecture d'un jour / département sauvegardé (JSON décompressé).
+	case 'GET:observations/horaire-jour':
+		assurerTableObsHoraire($db);
+		$date = $_GET['date'] ?? '';
+		$dep = $_GET['departement'] ?? '';
+		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || !preg_match('/^\w{2,3}$/', $dep)) repondre(['erreur' => 'date et departement requis'], 400);
+		$stmt = $db->prepare('SELECT nb_stations, UNCOMPRESS(contenu) AS contenu FROM obs_horaire_jour WHERE date = ? AND departement = ?');
+		$stmt->bind_param('ss', $date, $dep);
+		$stmt->execute();
+		$ligne = $stmt->get_result()->fetch_assoc();
+		if (!$ligne) repondre(['erreur' => 'introuvable'], 404);
+		repondre(['date' => $date, 'departement' => $dep, 'nb_stations' => (int)$ligne['nb_stations'], 'stations' => json_decode($ligne['contenu'], true)]);
+
+	// Inventaire de la sauvegarde : jours présents, nombre de départements et place occupée (octets compressés).
+	case 'GET:observations/horaire-jours':
+		assurerTableObsHoraire($db);
+		$res = $db->query('SELECT date, COUNT(*) AS departements, SUM(nb_stations) AS stations, SUM(LENGTH(contenu)) AS octets FROM obs_horaire_jour GROUP BY date ORDER BY date');
+		$jours = [];
+		while ($l = $res->fetch_assoc()) $jours[] = ['date' => $l['date'], 'departements' => (int)$l['departements'], 'stations' => (int)$l['stations'], 'octets' => (int)$l['octets']];
+		repondre(['jours' => $jours]);
 
 	// Texte lisible des bulletins récents : [{date, heure, texte}].
 	case 'POST:vigilance/textes-recents':
