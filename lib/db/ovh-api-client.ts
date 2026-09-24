@@ -253,6 +253,12 @@ export const ovhApi = {
   vigilanceTextesRecentsEnregistrer: (textes: { date: string; heure: string; texte: string }[]) =>
     appelerApi<{ ok: true; compte: number }>('vigilance/textes-recents', { method: 'POST', body: JSON.stringify({ textes }) }),
 
+  observationsHoraireEnregistrer: (jours: { date: string; departement: string; nb_stations: number; contenu: string }[]) =>
+    appelerApi<{ ok: true; compte: number }>('observations/horaire-jour', { method: 'POST', body: JSON.stringify({ jours }) }),
+
+  observationsHoraireInventaire: () =>
+    appelerApi<{ jours: { date: string; departements: number; stations: number; octets: number }[] }>('observations/horaire-jours'),
+
   vigilanceBulletin: (base: string, id: number) =>
     appelerApi<VigilanceBulletinCompletApi>(`vigilance/bulletin&base=${base}&id=${id}`),
 
