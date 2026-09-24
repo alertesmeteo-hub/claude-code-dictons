@@ -37,7 +37,7 @@ interface Observation {
   t: number | null; td: number | null; u: number | null;
   dd: number | null; ff: number | null; fxy: number | null; fxi: number | null;
   pmer: number | null; vv: number | null;
-  tn: number | null; tx: number | null; rr1: number | null; insolh: number | null;
+  tn: number | null; tx: number | null; rr1: number | null; insolh: number | null; ray_glo01: number | null; n: number | null;
 }
 
 const jourParis = (iso: string) =>
@@ -179,6 +179,22 @@ function finaliserArchive() {
   console.log(`Archive : ${quotidiensParJour.size} jour(s) mis à jour, ${recent.size} stations dans recent/`);
 }
 
+/**
+ * Temps présent déduit des mesures horaires (les stations automatiques ne transmettent pas de code de temps présent) :
+ * pluie (RR1), brouillard / brume (visibilité et humidité), nébulosité (N en octas, sinon ensoleillement de l'heure en plein jour).
+ * Renvoie null quand rien ne permet de conclure : la carte affiche alors la seule température.
+ */
+function tempsPresent(o: Observation): { weather: string | null; clouds: string | null } {
+  let weather: string | null = null;
+  if (o.rr1 != null && o.rr1 >= 0.2) weather = o.rr1 >= 2 ? 'Averses' : 'Pluie';
+  else if (o.vv != null && o.u != null && o.vv < 1000 && o.u >= 90) weather = 'Brouillard';
+  else if (o.vv != null && o.u != null && o.vv < 5000 && o.u >= 90) weather = 'Brume';
+  let pct: number | null = null;
+  if (o.n != null && o.n >= 0 && o.n <= 8) pct = Math.round((o.n / 8) * 100);
+  else if (o.insolh != null && o.ray_glo01 != null && o.ray_glo01 >= 300000) pct = Math.round(100 - Math.min(100, (o.insolh / 60) * 100));
+  return { weather, clouds: pct != null ? `Nébulosité ${pct} %` : null };
+}
+
 /** Ligne de la carte pour une station : dernière observation, tendances 1 h / 24 h, mini et maxi du jour (heure de Paris). */
 function ligneCarte(s: Station, liste: Observation[]) {
   const obs = liste.filter((o) => o.t != null).sort((a, b) => Date.parse(b.validity_time) - Date.parse(a.validity_time));
@@ -197,6 +213,7 @@ function ligneCarte(s: Station, liste: Observation[]) {
   const t = kelvinEnC(der.t!);
   const td = der.td != null ? kelvinEnC(der.td) : null;
   const raf = der.fxy ?? der.fxi;
+  const tp = tempsPresent(der);
   return {
     source: 'MF', id: s.id, name: s.nom, lat: arrondi(s.lat, 6), lon: arrondi(s.lon, 6), time: der.validity_time,
     temperature: t, dewpoint: td,
@@ -206,7 +223,7 @@ function ligneCarte(s: Station, liste: Observation[]) {
     gust_kmh: raf != null ? arrondi(raf * 3.6) : null,
     pressure: der.pmer != null ? arrondi(der.pmer / 100) : null,
     visibility_km: der.vv != null ? arrondi(der.vv / 1000) : null,
-    weather: null, weather_code: null, flight_cat: null, clouds: null, raw: null,
+    weather: tp.weather, weather_code: null, flight_cat: null, clouds: tp.clouds, raw: null,
     temp_trend: prec ? arrondi(t - kelvinEnC(prec.t!)) : null,
     temp_trend_24h: j24 ? arrondi(t - kelvinEnC(j24.t!)) : null,
     tmin: bas.length ? Math.min(...bas) : null,
