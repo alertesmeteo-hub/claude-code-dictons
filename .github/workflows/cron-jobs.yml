@@ -5,13 +5,15 @@ name: Tâches planifiées
 #   - OVH_API_TOKEN        (même valeur que DICTON_API_TOKEN dans ovh-api/config.php)
 #   - METEOFRANCE_API_KEY  (API DPObs, portail-api.meteofrance.fr)
 #
+# Températures extrêmes : NE tourne PLUS ici. Le script cron-extremes-meteo.ts est exécuté toutes les heures par le
+# cron du VPS (clé METEOFRANCE_API_KEY du .env du VPS, abonnée à DPObs + DPPaquetObs) — voir README.
+#
 # Ces tâches appellent l'API PHP hébergée sur OVH en HTTPS (pas de connexion MySQL directe),
 # donc aucun problème de réseau contrairement à une tentative de connexion directe à la base.
 
 on:
   schedule:
     - cron: '5 0 * * *'   # 00:05 UTC — génération de la page du jour
-    - cron: '0 */3 * * *' # toutes les 3h — synchronisation des températures extrêmes
     - cron: '10 */1 * * *' # toutes les heures — archivage du bulletin de vigilance
   workflow_dispatch: {}
 
@@ -30,22 +32,6 @@ jobs:
         env:
           OVH_API_URL: ${{ secrets.OVH_API_URL }}
           OVH_API_TOKEN: ${{ secrets.OVH_API_TOKEN }}
-
-  extremes-meteo:
-    if: github.event.schedule == '0 */3 * * *' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run cron:extremes-meteo
-        env:
-          OVH_API_URL: ${{ secrets.OVH_API_URL }}
-          OVH_API_TOKEN: ${{ secrets.OVH_API_TOKEN }}
-          METEOFRANCE_API_KEY: ${{ secrets.METEOFRANCE_API_KEY }}
 
   vigilance-meteo:
     if: github.event.schedule == '10 */1 * * *' || github.event_name == 'workflow_dispatch'
