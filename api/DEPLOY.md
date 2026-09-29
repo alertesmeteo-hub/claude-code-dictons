@@ -28,6 +28,7 @@ Aucun SQL a coller : les tables sont creees automatiquement au premier appel (AP
 | toutes les heures | `php ~/api/cron/collect_rain.php` |
 | toutes les heures | `php ~/api/cron/collect_records.php` |
 | toutes les heures | `php ~/api/cron/collect_extremes.php` |
+Le collecteur de vigilance lit d'abord l'API Meteo-France (cle `METEOFRANCE_API_KEY` du `.env`, souscription DPVigilance) et ne retombe sur `VIGILANCE_SOURCE_URL` (fichier GitHub) que si la cle est vide ou l'appel echoue ; la source utilisee figure dans `am_collector_runs.message` (« source : Meteo-France » ou « source : repli GitHub (raison) »).
 Sur le mutualise OVH (formulaire « Ajouter une planification »), les minutes sont ignorees : la frequence minimale est **une fois par heure**. Les seuils `stale` de l'API en tiennent compte (vigilance 90 min, pluie 2 h, records et extremes 3 h). Pour une frequence plus fine, il faudra un VPS ou un declencheur externe.
 Adapter le chemin selon le dossier reel. Le premier passage manuel : lancer les deux commandes en SSH, puis verifier `SELECT * FROM am_collector_runs ORDER BY id DESC LIMIT 5;`.
 
