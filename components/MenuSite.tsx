@@ -41,16 +41,13 @@ export default function MenuSite() {
             <a href="/jours-feries" onClick={() => suivre('Menu', { entrée: 'Jours fériés' })}>Jours fériés</a>
           </li>
           <li>
-            <a href="/carte-meteo" onClick={() => suivre('Menu', { entrée: 'Carte météo' })}>Carte météo</a>
-          </li>
-          <li>
             <a href="https://secheresse.alertes-meteo.com">Sécheresse</a>
           </li>
           <li>
             <a href="https://alertes-meteo.systeme.io/meteodujour">Météo par mail</a>
           </li>
           <li>
-            <a href="https://outils.alertes-meteo.com/">Outils</a>
+            <a href="/outils" onClick={() => suivre('Menu', { entrée: 'Outils' })}>Outils</a>
           </li>
           <li>
             <ThemeToggle />
