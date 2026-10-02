@@ -41,6 +41,9 @@ export default function MenuSite() {
             <a href="/jours-feries" onClick={() => suivre('Menu', { entrée: 'Jours fériés' })}>Jours fériés</a>
           </li>
           <li>
+            <a href="/carte-meteo" onClick={() => suivre('Menu', { entrée: 'Carte météo' })}>Carte météo</a>
+          </li>
+          <li>
             <a href="https://secheresse.alertes-meteo.com">Sécheresse</a>
           </li>
           <li>
