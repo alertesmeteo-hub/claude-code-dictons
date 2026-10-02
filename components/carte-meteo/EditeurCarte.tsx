@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { projeter, moyenne, LATITUDE_SEUIL_NORD_SUD, type TailleCarte } from '@/lib/meteo/projection-france';
 import { LOGOS_PRESETS, logoParDefaut } from '@/lib/meteo/logos';
-import { PICTOS_METEO, pictoDepuisCodeMeteo, type PictoMeteo } from './pictos';
+import { PICTOS_METEO, PICTOS_IMAGES, pictoDepuisCodeMeteo, estPictoImage, cheminPictoImage, type PictoMeteo } from './pictos';
 import { exporterEnJpg } from './ExportJpg';
 import type { PointCarte } from '@/app/api/v1/carte-meteo/previsions/route';
 
@@ -184,22 +184,44 @@ export default function EditeurCarte({ points, modele, dateLabel, onRecommencer 
                 className="carte-meteo-picto"
                 onClick={() => setPaletteOuvertePour((c) => (c === p.code ? null : p.code))}
               >
-                {p.picto}
+                {estPictoImage(p.picto) ? (
+                  <img src={cheminPictoImage(p.picto)} alt="" className="carte-meteo-picto-image" />
+                ) : (
+                  p.picto
+                )}
               </button>
               {paletteOuvertePour === p.code && (
                 <div className="carte-meteo-palette">
-                  {PICTOS_METEO.map((picto) => (
-                    <button
-                      key={picto}
-                      type="button"
-                      onClick={() => {
-                        modifierPoint(p.code, 'picto', picto);
-                        setPaletteOuvertePour(null);
-                      }}
-                    >
-                      {picto}
-                    </button>
-                  ))}
+                  <div className="carte-meteo-palette-groupe">
+                    {PICTOS_METEO.map((picto) => (
+                      <button
+                        key={picto}
+                        type="button"
+                        onClick={() => {
+                          modifierPoint(p.code, 'picto', picto);
+                          setPaletteOuvertePour(null);
+                        }}
+                      >
+                        {picto}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="carte-meteo-palette-separateur">Mes pictos</div>
+                  <div className="carte-meteo-palette-groupe">
+                    {PICTOS_IMAGES.map((picto) => (
+                      <button
+                        key={picto.id}
+                        type="button"
+                        title={picto.label}
+                        onClick={() => {
+                          modifierPoint(p.code, 'picto', picto.id);
+                          setPaletteOuvertePour(null);
+                        }}
+                      >
+                        <img src={picto.fichier} alt={picto.label} className="carte-meteo-picto-image" />
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
               <input
