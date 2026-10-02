@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { projeter, moyenne, LATITUDE_SEUIL_NORD_SUD, type TailleCarte } from '@/lib/meteo/projection-france';
 import { LOGOS_PRESETS, logoParDefaut } from '@/lib/meteo/logos';
+import { CHEF_LIEU_PAR_DEPARTEMENT } from '@/lib/meteo/chefs-lieux';
 import { PICTOS_METEO, PICTOS_IMAGES, pictoDepuisCodeMeteo, estPictoImage, cheminPictoImage, type PictoMeteo } from './pictos';
 import { exporterEnJpg } from './ExportJpg';
 import type { PointCarte } from '@/app/api/v1/carte-meteo/previsions/route';
@@ -26,7 +27,15 @@ interface Props {
 
 const TAILLE: TailleCarte = { largeur: 760, hauteur: 760 };
 
-type GeoJsonDepartements = {
+type FondCarte = 'departements' | 'regions';
+type NiveauNoms = 'departement' | 'ville';
+
+const FICHIER_CONTOURS: Record<FondCarte, string> = {
+  departements: '/geo/departements.geojson',
+  regions: '/geo/regions.geojson',
+};
+
+type GeoJsonContours = {
   features: { properties: { code: string }; geometry: { type: string; coordinates: unknown } }[];
 };
 
@@ -49,6 +58,9 @@ function geometrieVersChemin(geometry: { type: string; coordinates: unknown }, t
 }
 
 export default function EditeurCarte({ points, modele, dateLabel, onRecommencer }: Props) {
+  const [fond, setFond] = useState<FondCarte>('departements');
+  const [niveauNoms, setNiveauNoms] = useState<NiveauNoms>('departement');
+  const [afficherNoms, setAfficherNoms] = useState(false);
   const [contours, setContours] = useState<{ code: string; d: string }[]>([]);
   const [edition, setEdition] = useState<PointEdition[]>(() =>
     points.map((p) => ({
@@ -79,9 +91,9 @@ export default function EditeurCarte({ points, modele, dateLabel, onRecommencer 
   const carteRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch('/geo/departements.geojson')
+    fetch(FICHIER_CONTOURS[fond])
       .then((r) => r.json())
-      .then((geojson: GeoJsonDepartements) => {
+      .then((geojson: GeoJsonContours) => {
         setContours(
           geojson.features.map((f) => ({
             code: f.properties.code,
@@ -90,7 +102,7 @@ export default function EditeurCarte({ points, modele, dateLabel, onRecommencer 
         );
       })
       .catch(() => setContours([]));
-  }, []);
+  }, [fond]);
 
   function modifierPoint(code: string, champ: 'mini' | 'maxi' | 'picto', valeur: string) {
     setEdition((prev) => prev.map((p) => (p.code === code ? { ...p, [champ]: valeur } : p)));
@@ -139,6 +151,24 @@ export default function EditeurCarte({ points, modele, dateLabel, onRecommencer 
           <input type="text" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
         <label>
+          Contours
+          <select value={fond} onChange={(e) => setFond(e.target.value as FondCarte)}>
+            <option value="departements">Départements</option>
+            <option value="regions">Régions</option>
+          </select>
+        </label>
+        <label>
+          Noms affichés
+          <select value={niveauNoms} onChange={(e) => setNiveauNoms(e.target.value as NiveauNoms)}>
+            <option value="departement">Départements</option>
+            <option value="ville">Villes</option>
+          </select>
+        </label>
+        <label className="carte-meteo-case">
+          <input type="checkbox" checked={afficherNoms} onChange={(e) => setAfficherNoms(e.target.checked)} />
+          Afficher les noms sur la carte
+        </label>
+        <label>
           Moyenne Nord
           <input type="text" value={moyenneNord} onChange={(e) => setMoyenneNord(e.target.value)} />
         </label>
@@ -177,8 +207,10 @@ export default function EditeurCarte({ points, modele, dateLabel, onRecommencer 
 
         {edition.map((p) => {
           const { x, y } = projeter(p.lat, p.lon, TAILLE);
+          const nomAffiche = niveauNoms === 'ville' ? CHEF_LIEU_PAR_DEPARTEMENT[p.code] ?? p.nom : p.nom;
           return (
-            <div key={p.code} className="carte-meteo-marqueur" style={{ left: x, top: y }} title={p.nom}>
+            <div key={p.code} className="carte-meteo-marqueur" style={{ left: x, top: y }} title={nomAffiche}>
+              {afficherNoms && <div className="carte-meteo-nom">{nomAffiche}</div>}
               <button
                 type="button"
                 className="carte-meteo-picto"
