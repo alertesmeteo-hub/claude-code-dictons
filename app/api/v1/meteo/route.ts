@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { recupererPrevisionsMeteo } from '@/lib/meteo/open-meteo';
+import { MeteoHorsZoneErreur, recupererPrevisionsMeteo } from '@/lib/meteo/alertes-meteo';
 
 export async function GET(req: NextRequest) {
   const lat = Number(req.nextUrl.searchParams.get('lat'));
@@ -15,6 +15,9 @@ export async function GET(req: NextRequest) {
       headers: { 'Cache-Control': 'public, max-age=900' },
     });
   } catch (erreur) {
+    if (erreur instanceof MeteoHorsZoneErreur) {
+      return NextResponse.json({ erreur: 'Prévisions disponibles pour la France métropolitaine seulement' }, { status: 404 });
+    }
     console.error('Erreur météo', erreur);
     return NextResponse.json({ erreur: 'Météo momentanément indisponible' }, { status: 503 });
   }
