@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { DEPARTEMENTS_FR } from '@/lib/meteo/departements-fr';
 import { COORDS_DEPARTEMENTS } from '@/lib/meteo/departements-coords';
-import { recupererPrevisionsModele, type ModeleMeteo } from '@/lib/meteo/previsions-modeles';
+import { recupererPrevisionsDepartements, type ModeleMeteo } from '@/lib/meteo/previsions-modeles';
 
 export interface PointCarte {
   code: string;
@@ -9,17 +9,6 @@ export interface PointCarte {
   mini: number | null;
   maxi: number | null;
   codeConditions: number | null;
-}
-
-const CONCURRENCE_MAX = 10;
-
-async function parLots<T, R>(items: T[], taille: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const resultats: R[] = [];
-  for (let i = 0; i < items.length; i += taille) {
-    const lot = items.slice(i, i + taille);
-    resultats.push(...(await Promise.all(lot.map(fn))));
-  }
-  return resultats;
 }
 
 export async function POST(req: NextRequest) {
@@ -37,16 +26,17 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const points = await parLots(codesValides, CONCURRENCE_MAX, async (code): Promise<PointCarte> => {
-      const { lat, lon } = COORDS_DEPARTEMENTS[code];
-      const jours = await recupererPrevisionsModele(lat, lon, modele);
-      const jour = (dateISO ? jours.find((j) => j.dateISO === dateISO) : jours[0]) ?? jours[0] ?? null;
+    // Un seul appel : Alertes Météo calcule les départements demandés avec ses modèles (fichier recalculé quatre fois par jour).
+    const prevus = await recupererPrevisionsDepartements(modele, codesValides, dateISO);
+    const parCode = new Map(prevus.map((p) => [p.code, p]));
+    const points: PointCarte[] = codesValides.map((code) => {
+      const p = parCode.get(code);
       return {
         code,
         nom: DEPARTEMENTS_FR[code] ?? code,
-        mini: jour?.mini ?? null,
-        maxi: jour?.maxi ?? null,
-        codeConditions: jour?.codeConditions ?? null,
+        mini: p?.mini ?? null,
+        maxi: p?.maxi ?? null,
+        codeConditions: p?.codeConditions ?? null,
       };
     });
 

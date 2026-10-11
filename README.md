@@ -30,7 +30,7 @@ Implémenté (site en production sur un VPS OVH, voir « Déploiement ») :
 - **Températures extrêmes** : script `cron-extremes-meteo.ts` (Météo-France) + route publique + plugin WordPress `[temperatures_extremes_france]`.
 - **Archives de vigilance** : script `cron-vigilance-meteo.ts` (Météo-France) — carte des couleurs par département (échéances J et J+1) et texte de synthèse national, archivés quotidiennement en base.
 - **Outils** `/outils` : page listant les outils (actuellement « Carte météo »).
-- **Carte météo** `/outils/carte-meteo` : génération d'une carte de France (mini/maxi par région/département, modèle Harmonie/AROME ou CEP/ECMWF via Open-Meteo, jusqu'à J+6), pictos et valeurs éditables à la main, export en JPG côté client (`html-to-image`). Contours départementaux : `public/geo/departements.geojson` (IGN Admin Express, Licence Ouverte Etalab, via le projet [france-geojson](https://github.com/gregoiredavid/france-geojson)).
+- **Carte météo** `/outils/carte-meteo` : génération d'une carte de France (mini/maxi par région/département, modèle Harmonie/AROME ou CEP/ECMWF calculés par Alertes Météo, jusqu'à J+6), pictos et valeurs éditables à la main, export en JPG côté client (`html-to-image`). Contours départementaux : `public/geo/departements.geojson` (IGN Admin Express, Licence Ouverte Etalab, via le projet [france-geojson](https://github.com/gregoiredavid/france-geojson)).
 - Calculs déterministes 100 % locaux, testés (Vitest) : jour de l'année, semaine ISO, zodiaque, astrologie chinoise, calendrier républicain, Pâques et jours fériés, lever/coucher du soleil (NOAA), phases de la Lune et distance Terre-Lune (Meeus ch. 47 et 49), équinoxes et solstices (Meeus ch. 27), fêtes populaires (dates calculées).
 - Météo géolocalisée calculée par Alertes Météo avec ses modèles (AROME, ARPEGE, ICON), France métropolitaine, avec repli sur recherche manuelle de commune.
 - API PHP intermédiaire (`ovh-api/`) + client TypeScript (`lib/db/ovh-api-client.ts`).
@@ -144,7 +144,7 @@ GitHub Actions (`.github/workflows/cron-jobs.yml`) reste disponible ; secrets n�
 | `GET /api/v1/soleil?lat=&lon=&date=` | Lever/coucher du soleil calculés |
 | `GET /api/v1/extremes/france` | Températures extrêmes du jour (relaie `ovh-api/`, consommé par le plugin WordPress) |
 | `GET /api/v1/villes/recherche?q=` | Autocomplete recherche de commune |
-| `POST /api/v1/carte-meteo/previsions` | Prévisions mini/maxi par département (`{modele: 'harmonie'\|'cep', codesDepartements: string[], date}`), proxy Open-Meteo (modèles `meteofrance_arome_france` / `ecmwf_ifs025`), pour `/outils/carte-meteo` |
+| `POST /api/v1/carte-meteo/previsions` | Prévisions mini/maxi par département (`{modele: 'harmonie'\|'cep', codesDepartements: string[], date}`), proxy de l'API d'Alertes Météo `/api/carte-departements` (famille « harmonie » : AROME puis ARPEGE et ICON ; famille « cep » : ECMWF IFS), pour `/outils/carte-meteo` |
 
 ## API PHP intermédiaire (`ovh-api/`)
 

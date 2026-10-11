@@ -79,8 +79,8 @@ export function cheminPictoImage(picto: string): string | undefined {
 }
 
 /**
- * Code météo WMO (renvoyé par Open-Meteo dans `weather_code`) → picto emoji suggéré.
- * Table volontairement groupée par familles (voir https://open-meteo.com/en/docs — WMO Weather interpretation codes).
+ * Code météo OMM (WMO, renvoyé par les prévisions d'Alertes Météo) → picto emoji suggéré.
+ * Table volontairement groupée par familles (codes d'interprétation du temps présent de l'OMM).
  */
 export function pictoDepuisCodeMeteo(code: number | null | undefined): PictoMeteo {
   if (code == null) return '☀️';
