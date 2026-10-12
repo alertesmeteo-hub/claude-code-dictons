@@ -118,6 +118,62 @@ print(r.json())</pre>
 <li><code>GET /v1/health</code> : etat du service.</li>
 </ul>
 
+<h2>Exemple : carte de vigilance de la France</h2>
+<p>Une carte colorée des departements (vert, jaune, orange, rouge) pour aujourd'hui ou demain, avec une seule requete toutes les 30 minutes.</p>
+<ol>
+<li>Telechargez la carte : <a href="/exemples/france-departements.svg">france-departements.svg</a> (contours IGN / Etalab, Licence Ouverte 2.0) et placez-la a cote de votre page.</li>
+<li>Creez la page <code>carte-vigilance.php</code> avec le code ci-dessous, et remplacez <code>VOTRE_CLE</code>.</li>
+</ol>
+<pre>&lt;?php
+$key   = &#x27;VOTRE_CLE&#x27;;   // ta clé API (reste sur le serveur, jamais dans une page publique)
+$jour  = ($_GET[&#x27;jour&#x27;] ?? &#x27;J&#x27;) === &#x27;J1&#x27; ? &#x27;J1&#x27; : &#x27;J&#x27;;   // J = aujourd&#x27;hui, J1 = demain
+$cache = __DIR__ . &#x27;/vigilance-france.json&#x27;;
+
+if (!is_file($cache) || filemtime($cache) &lt; time() - 1800) {   // cache : 30 minutes
+    $ctx  = stream_context_create([&#x27;http&#x27; =&gt; [&#x27;header&#x27; =&gt; &quot;X-API-Key: $key\r\n&quot;, &#x27;timeout&#x27; =&gt; 10]]);
+    $json = @file_get_contents(&#x27;https://api.alertes-meteo.com/v1/vigilance&#x27;, false, $ctx);
+    if ($json !== false) file_put_contents($cache, $json);
+}
+$data = is_file($cache) ? json_decode(file_get_contents($cache), true) : null;
+
+// Niveau maximum par département (la zone littorale est comptée avec son département)
+$max = [];
+foreach ($data[&#x27;data&#x27;][&#x27;periods&#x27;] ?? [] as $p) {
+    if ($p[&#x27;echeance&#x27;] !== $jour) continue;
+    foreach ($p[&#x27;domains&#x27;] as $d) {
+        $code = substr($d[&#x27;domain_id&#x27;], 0, 2);
+        $max[$code] = max($max[$code] ?? 0, $d[&#x27;max_level&#x27;]);
+    }
+}
+// Paris et la petite couronne forment une seule zone de vigilance (75)
+foreach ([&#x27;92&#x27;, &#x27;93&#x27;, &#x27;94&#x27;] as $c) if (isset($max[&#x27;75&#x27;])) $max[$c] = $max[&#x27;75&#x27;];
+
+$couleurs = [0 =&gt; &#x27;#dfe6ee&#x27;, 1 =&gt; &#x27;#7cc38f&#x27;, 2 =&gt; &#x27;#f2c500&#x27;, 3 =&gt; &#x27;#ff8c00&#x27;, 4 =&gt; &#x27;#d0021b&#x27;];  // 0 = pas de donnée
+$svg = file_get_contents(__DIR__ . &#x27;/france-departements.svg&#x27;);   // à télécharger (voir ci-dessus)
+$svg = preg_replace_callback(&#x27;/id=&quot;d-(\w\w)&quot; fill=&quot;#[0-9a-f]{6}&quot;/&#x27;, function ($m) use ($max, $couleurs, $data) {
+    $niveau = $data ? ($max[$m[1]] ?? 1) : 0;
+    return &#x27;id=&quot;d-&#x27; . $m[1] . &#x27;&quot; fill=&quot;&#x27; . $couleurs[$niveau] . &#x27;&quot;&#x27;;
+}, $svg);
+?&gt;
+&lt;div style=&quot;font-family:sans-serif;max-width:560px&quot;&gt;
+  &lt;h3&gt;Vigilance météo — France métropolitaine (&lt;?= $jour === &#x27;J&#x27; ? &quot;aujourd&#x27;hui&quot; : &#x27;demain&#x27; ?&gt;)&lt;/h3&gt;
+  &lt;p&gt;&lt;a href=&quot;?jour=J&quot;&gt;Aujourd&#x27;hui&lt;/a&gt; · &lt;a href=&quot;?jour=J1&quot;&gt;Demain&lt;/a&gt;&lt;/p&gt;
+  &lt;?= $svg ?&gt;
+  &lt;p style=&quot;font-size:13px&quot;&gt;
+    &lt;span style=&quot;color:#7cc38f&quot;&gt;■&lt;/span&gt; Vert
+    &lt;span style=&quot;color:#f2c500&quot;&gt;■&lt;/span&gt; Jaune
+    &lt;span style=&quot;color:#ff8c00&quot;&gt;■&lt;/span&gt; Orange
+    &lt;span style=&quot;color:#d0021b&quot;&gt;■&lt;/span&gt; Rouge
+  &lt;/p&gt;
+  &lt;?php if (!empty($data[&#x27;meta&#x27;][&#x27;attribution&#x27;])): $a = $data[&#x27;meta&#x27;][&#x27;attribution&#x27;]; ?&gt;
+    &lt;p style=&quot;font-size:12px;color:#666&quot;&gt;
+      &lt;?= htmlspecialchars($a[&#x27;text&#x27;]) ?&gt; —
+      &lt;a href=&quot;&lt;?= htmlspecialchars($a[&#x27;url&#x27;]) ?&gt;&quot; rel=&quot;noopener&quot;&gt;Alertes-Meteo.com&lt;/a&gt;
+    &lt;/p&gt;
+  &lt;?php endif; ?&gt;
+&lt;/div&gt;</pre>
+<p>La cle reste sur votre serveur : ne la mettez jamais dans du JavaScript public. Les departements 92, 93 et 94 prennent la couleur de la zone de Paris (75). Service non officiel : la vigilance officielle reste sur vigilance.meteofrance.fr.</p>
+
 <h2>Attribution : un lien vers Alertes-Meteo.com</h2>
 <p>Chaque reponse contient <code>meta.attribution</code> avec un texte et une adresse. Nous vous demandons de l'afficher pres des donnees, sous forme de lien cliquable vers <a href="https://www.alertes-meteo.com">www.alertes-meteo.com</a> :</p>
 <pre>"attribution": {

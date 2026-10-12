@@ -14,6 +14,7 @@ RewriteRule ^$ public/index.html [L]
 RewriteRule ^(docs|cle|statut|dashboard|playground|admin)/?$ public/$1.html [L]
 RewriteRule ^(openapi\.yaml|robots\.txt|sitemap\.xml)$ public/$1 [L]
 RewriteRule ^assets/(.+)$ public/assets/$1 [L]
+RewriteRule ^exemples/(.+)$ public/exemples/$1 [L]
 
 <IfModule mod_headers.c>
   Header always set X-Content-Type-Options "nosniff"
