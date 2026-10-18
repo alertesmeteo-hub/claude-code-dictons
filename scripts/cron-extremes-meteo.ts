@@ -19,6 +19,8 @@ const ALTITUDE_MAX_M = 500;
 const NB_PAR_TYPE = 15; // nombre de stations conservées pour les maxima et pour les minima
 const PAUSE_ENTRE_APPELS_MS = 1500;
 const MAX_TENTATIVES = 3;
+/** Préfixe des erreurs d'autorisation (401/403) : inutile de réessayer, la clé n'a pas accès à l'API. */
+const ACCES_REFUSE = 'ACCES_REFUSE';
 /** Codes à essayer, dans l'ordre, pour les départements dont l'écriture n'est pas évidente. */
 const VARIANTES_DEPARTEMENT: Record<string, string[]> = { '20': ['2A', '2B', '20'] };
 
@@ -67,6 +69,12 @@ async function get(url: string): Promise<string> {
     if (r.ok) return texte;
     const detail = texte.match(/<am:description>([^<]*)/)?.[1] ?? texte.slice(0, 150);
     dernier = `HTTP ${r.status} ${detail}`;
+    if (r.status === 401 || r.status === 403) {
+      throw new Error(
+        `${ACCES_REFUSE} ${dernier} — ${url.split('?')[0]} : la clé METEOFRANCE_API_KEY n'est pas (ou plus) souscrite à cette API ` +
+          `sur https://portail-api.meteofrance.fr (souscriptions DPObs et DPPaquetObs à vérifier).`,
+      );
+    }
     if (r.status !== 429 && r.status < 500) break;
     await pause(essai * 5000);
   }
@@ -196,12 +204,13 @@ async function main() {
     } catch (erreur) {
       derniereErreur = erreur;
       console.error(`Tentative ${tentative}/${MAX_TENTATIVES} échouée`, erreur instanceof Error ? erreur.message : erreur);
+      if (erreur instanceof Error && erreur.message.startsWith(ACCES_REFUSE)) break; // réessayer ne servirait à rien
       if (tentative < MAX_TENTATIVES) await pause(tentative * 5000);
     }
   }
 
   await ovhApi.syncLogEnregistrer('meteo_extremes', 'erreur', String(derniereErreur)).catch(() => {});
-  console.error('Échec définitif après', MAX_TENTATIVES, 'tentatives');
+  console.error('Échec définitif :', derniereErreur instanceof Error ? derniereErreur.message : derniereErreur);
   process.exitCode = 1;
 }
 

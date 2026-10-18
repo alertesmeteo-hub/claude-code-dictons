@@ -12,7 +12,10 @@ on:
   schedule:
     - cron: '5 0 * * *'   # 00:05 UTC — génération de la page du jour
     - cron: '0 */3 * * *' # toutes les 3h — synchronisation des températures extrêmes
-    - cron: '10 */1 * * *' # toutes les heures — archivage du bulletin de vigilance
+    # Vigilance : GitHub retarde ou abandonne une partie des crons `schedule` quand ses serveurs sont chargés
+    # (un cron « toutes les heures » ne s'est exécuté qu'environ 1 fois sur 3). On planifie donc 3 passages par
+    # heure : l'archivage est rejouable sans effet de bord, et un passage perdu n'a plus d'impact visible.
+    - cron: '7,27,47 * * * *' # toutes les 20 min — archivage du bulletin de vigilance
   workflow_dispatch: {}
 
 jobs:
@@ -48,8 +51,12 @@ jobs:
           METEOFRANCE_API_KEY: ${{ secrets.METEOFRANCE_API_KEY }}
 
   vigilance-meteo:
-    if: github.event.schedule == '10 */1 * * *' || github.event_name == 'workflow_dispatch'
+    if: github.event.schedule == '7,27,47 * * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: vigilance-meteo
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
